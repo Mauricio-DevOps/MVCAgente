@@ -180,7 +180,7 @@ public sealed class ApiClient
         CancellationToken cancellationToken)
     {
         return await _httpClient.GetFromJsonAsync<IReadOnlyList<WhatsappConversationMessageResponse>>(
-            $"/api/admin/whatsapp/conversations/{Uri.EscapeDataString(phoneNumber)}/messages?storeId={Uri.EscapeDataString(storeId)}",
+            $"/api/admin/whatsapp/conversations/messages?storeId={Uri.EscapeDataString(storeId)}&phoneNumber={Uri.EscapeDataString(phoneNumber)}",
             cancellationToken) ?? Array.Empty<WhatsappConversationMessageResponse>();
     }
 
@@ -192,7 +192,7 @@ public sealed class ApiClient
     {
         using var request = new HttpRequestMessage(
             HttpMethod.Patch,
-            $"/api/admin/whatsapp/conversations/{Uri.EscapeDataString(phoneNumber)}/agent")
+            $"/api/admin/whatsapp/conversations/agent?phoneNumber={Uri.EscapeDataString(phoneNumber)}")
         {
             Content = JsonContent.Create(new WhatsappContactAgentUpdateRequest(storeId, isAgentEnabled))
         };
@@ -209,7 +209,7 @@ public sealed class ApiClient
         CancellationToken cancellationToken)
     {
         using var response = await _httpClient.PostAsJsonAsync(
-            $"/api/admin/whatsapp/conversations/{Uri.EscapeDataString(phoneNumber)}/messages",
+            $"/api/admin/whatsapp/conversations/messages?phoneNumber={Uri.EscapeDataString(phoneNumber)}",
             new WhatsappManualMessageRequest(storeId, message),
             cancellationToken);
 
