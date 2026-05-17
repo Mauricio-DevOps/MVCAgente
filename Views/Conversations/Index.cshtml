@@ -1,0 +1,459 @@
+@model ConversationsViewModel
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@using System.Text.Json
+
+@{
+    ViewData["Title"] = "Conversas";
+    var antiforgery = Antiforgery.GetAndStoreTokens(Context);
+    var initialConversations = JsonSerializer.Serialize(
+        Model.Conversations,
+        new JsonSerializerOptions(JsonSerializerDefaults.Web));
+}
+
+<div class="dashboard-header conversation-page-header">
+    <div>
+        <span class="app-kicker">@Model.CompanyPhone</span>
+        <h1>Conversas</h1>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="alert alert-warning" role="alert">@Model.ErrorMessage</div>
+}
+
+<section class="whatsapp-shell"
+         data-conversations-app
+         data-list-url="@Url.Action("List", "Conversations")"
+         data-messages-url="@Url.Action("Messages", "Conversations")"
+         data-toggle-url="@Url.Action("ToggleAgent", "Conversations")"
+         data-send-url="@Url.Action("SendMessage", "Conversations")"
+         data-antiforgery-token="@antiforgery.RequestToken">
+    <aside class="whatsapp-sidebar" aria-label="Conversas">
+        <div class="whatsapp-sidebar-heading">
+            <h2>Chats</h2>
+            <span data-conversation-count>@Model.Conversations.Count</span>
+        </div>
+        <div class="whatsapp-chat-list" data-conversation-list></div>
+    </aside>
+
+    <section class="whatsapp-thread" aria-live="polite">
+        <header class="whatsapp-thread-header" data-thread-header>
+            <div>
+                <strong data-thread-title>Nenhum chat selecionado</strong>
+                <span data-thread-subtitle class="muted">-</span>
+            </div>
+            <span class="status-pill status-done" data-thread-agent-status>Agente ativo</span>
+        </header>
+
+        <div class="conversation-alert" data-conversation-alert hidden></div>
+        <div class="whatsapp-messages" data-message-list></div>
+
+        <form class="whatsapp-compose" data-compose-form>
+            <textarea data-compose-input rows="2" maxlength="1200" disabled></textarea>
+            <button type="submit" class="btn btn-primary" data-compose-button disabled>Enviar</button>
+        </form>
+    </section>
+</section>
+
+<script type="application/json" id="initial-conversations">@Html.Raw(initialConversations)</script>
+
+@section Scripts {
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            var root = document.querySelector("[data-conversations-app]");
+            if (!root) {
+                return;
+            }
+
+            var listUrl = root.dataset.listUrl || "";
+            var messagesUrl = root.dataset.messagesUrl || "";
+            var toggleUrl = root.dataset.toggleUrl || "";
+            var sendUrl = root.dataset.sendUrl || "";
+            var antiforgeryToken = root.dataset.antiforgeryToken || "";
+            var listElement = root.querySelector("[data-conversation-list]");
+            var countElement = root.querySelector("[data-conversation-count]");
+            var messageList = root.querySelector("[data-message-list]");
+            var threadTitle = root.querySelector("[data-thread-title]");
+            var threadSubtitle = root.querySelector("[data-thread-subtitle]");
+            var threadAgentStatus = root.querySelector("[data-thread-agent-status]");
+            var alertElement = root.querySelector("[data-conversation-alert]");
+            var composeForm = root.querySelector("[data-compose-form]");
+            var composeInput = root.querySelector("[data-compose-input]");
+            var composeButton = root.querySelector("[data-compose-button]");
+            var initialJson = document.getElementById("initial-conversations");
+            var conversations = [];
+            var selectedPhone = null;
+            var isSending = false;
+
+            try {
+                conversations = JSON.parse(initialJson ? initialJson.textContent : "[]");
+            } catch {
+                conversations = [];
+            }
+
+            if (conversations.length > 0) {
+                selectedPhone = conversations[0].phoneNumber;
+            }
+
+            renderConversationList();
+            renderThreadHeader();
+            if (selectedPhone) {
+                loadMessages(true);
+            } else {
+                renderEmptyMessages();
+            }
+
+            window.setInterval(function () {
+                loadConversations(false);
+                if (selectedPhone) {
+                    loadMessages(false);
+                }
+            }, 5000);
+
+            composeForm.addEventListener("submit", function (event) {
+                event.preventDefault();
+                sendMessage();
+            });
+
+            async function loadConversations(showErrors) {
+                try {
+                    var response = await fetch(listUrl, {
+                        headers: { "Accept": "application/json" }
+                    });
+                    if (!response.ok) {
+                        throw new Error("Falha ao carregar conversas.");
+                    }
+
+                    conversations = await response.json();
+                    if (!selectedPhone && conversations.length > 0) {
+                        selectedPhone = conversations[0].phoneNumber;
+                    }
+
+                    if (selectedPhone && !conversations.some(function (item) { return item.phoneNumber === selectedPhone; })) {
+                        selectedPhone = conversations.length > 0 ? conversations[0].phoneNumber : null;
+                    }
+
+                    renderConversationList();
+                    renderThreadHeader();
+                    if (!selectedPhone) {
+                        renderEmptyMessages();
+                    }
+                } catch (error) {
+                    if (showErrors) {
+                        showAlert(error.message);
+                    }
+                }
+            }
+
+            async function loadMessages(shouldScroll) {
+                if (!selectedPhone) {
+                    renderEmptyMessages();
+                    return;
+                }
+
+                try {
+                    var response = await fetch(messagesUrl + "?phoneNumber=" + encodeURIComponent(selectedPhone), {
+                        headers: { "Accept": "application/json" }
+                    });
+                    if (!response.ok) {
+                        throw new Error("Falha ao carregar mensagens.");
+                    }
+
+                    var messages = await response.json();
+                    renderMessages(messages, shouldScroll);
+                    hideAlert();
+                } catch (error) {
+                    showAlert(error.message);
+                }
+            }
+
+            async function toggleAgent(phoneNumber, isAgentEnabled, checkbox) {
+                checkbox.disabled = true;
+                try {
+                    var response = await fetch(toggleUrl, {
+                        method: "POST",
+                        headers: {
+                            "Accept": "application/json",
+                            "Content-Type": "application/json",
+                            "RequestVerificationToken": antiforgeryToken
+                        },
+                        body: JSON.stringify({ phoneNumber: phoneNumber, isAgentEnabled: isAgentEnabled })
+                    });
+                    if (!response.ok) {
+                        throw new Error("Falha ao atualizar o agente.");
+                    }
+
+                    var conversation = conversations.find(function (item) { return item.phoneNumber === phoneNumber; });
+                    if (conversation) {
+                        conversation.isAgentEnabled = isAgentEnabled;
+                    }
+                    renderConversationList();
+                    renderThreadHeader();
+                    hideAlert();
+                } catch (error) {
+                    checkbox.checked = !isAgentEnabled;
+                    showAlert(error.message);
+                } finally {
+                    checkbox.disabled = false;
+                }
+            }
+
+            async function sendMessage() {
+                if (!selectedPhone || isSending) {
+                    return;
+                }
+
+                var text = (composeInput.value || "").trim();
+                if (!text) {
+                    return;
+                }
+
+                isSending = true;
+                updateComposeState();
+                try {
+                    var response = await fetch(sendUrl, {
+                        method: "POST",
+                        headers: {
+                            "Accept": "application/json",
+                            "Content-Type": "application/json",
+                            "RequestVerificationToken": antiforgeryToken
+                        },
+                        body: JSON.stringify({ phoneNumber: selectedPhone, message: text })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error("Falha ao enviar a mensagem.");
+                    }
+
+                    composeInput.value = "";
+                    await loadMessages(true);
+                    await loadConversations(false);
+                    hideAlert();
+                } catch (error) {
+                    showAlert(error.message);
+                    await loadMessages(true);
+                    await loadConversations(false);
+                } finally {
+                    isSending = false;
+                    updateComposeState();
+                }
+            }
+
+            function selectConversation(phoneNumber) {
+                selectedPhone = phoneNumber;
+                renderConversationList();
+                renderThreadHeader();
+                loadMessages(true);
+                updateComposeState();
+            }
+
+            function renderConversationList() {
+                listElement.replaceChildren();
+                countElement.textContent = conversations.length.toString();
+
+                if (conversations.length === 0) {
+                    var empty = document.createElement("div");
+                    empty.className = "whatsapp-empty";
+                    empty.textContent = "Nenhuma conversa";
+                    listElement.appendChild(empty);
+                    updateComposeState();
+                    return;
+                }
+
+                conversations.forEach(function (conversation) {
+                    var item = document.createElement("div");
+                    item.className = "whatsapp-chat-item" + (conversation.phoneNumber === selectedPhone ? " selected" : "");
+
+                    var button = document.createElement("button");
+                    button.type = "button";
+                    button.className = "whatsapp-chat-button";
+                    button.addEventListener("click", function () {
+                        selectConversation(conversation.phoneNumber);
+                    });
+
+                    var avatar = document.createElement("span");
+                    avatar.className = "whatsapp-avatar";
+                    avatar.textContent = displayName(conversation).slice(0, 1).toUpperCase();
+
+                    var text = document.createElement("span");
+                    text.className = "whatsapp-chat-text";
+
+                    var name = document.createElement("strong");
+                    name.textContent = displayName(conversation);
+                    var preview = document.createElement("small");
+                    preview.textContent = conversation.lastMessage || "-";
+
+                    text.appendChild(name);
+                    text.appendChild(preview);
+                    button.appendChild(avatar);
+                    button.appendChild(text);
+
+                    var meta = document.createElement("div");
+                    meta.className = "whatsapp-chat-meta";
+
+                    var time = document.createElement("time");
+                    time.textContent = dateLabel(conversation.lastMessageAtUtc);
+                    meta.appendChild(time);
+
+                    var toggleLabel = document.createElement("label");
+                    toggleLabel.className = "whatsapp-agent-toggle";
+                    toggleLabel.title = "Agente ativo";
+                    var checkbox = document.createElement("input");
+                    checkbox.type = "checkbox";
+                    checkbox.checked = Boolean(conversation.isAgentEnabled);
+                    checkbox.addEventListener("click", function (event) {
+                        event.stopPropagation();
+                    });
+                    checkbox.addEventListener("change", function () {
+                        toggleAgent(conversation.phoneNumber, checkbox.checked, checkbox);
+                    });
+                    var toggleText = document.createElement("span");
+                    toggleText.textContent = "IA";
+                    toggleLabel.appendChild(checkbox);
+                    toggleLabel.appendChild(toggleText);
+                    meta.appendChild(toggleLabel);
+
+                    item.appendChild(button);
+                    item.appendChild(meta);
+                    listElement.appendChild(item);
+                });
+
+                updateComposeState();
+            }
+
+            function renderThreadHeader() {
+                var conversation = selectedConversation();
+                if (!conversation) {
+                    threadTitle.textContent = "Nenhum chat selecionado";
+                    threadSubtitle.textContent = "-";
+                    threadAgentStatus.textContent = "Agente ativo";
+                    threadAgentStatus.className = "status-pill status-done";
+                    return;
+                }
+
+                threadTitle.textContent = displayName(conversation);
+                threadSubtitle.textContent = conversation.phoneNumber;
+                threadAgentStatus.textContent = conversation.isAgentEnabled ? "Agente ativo" : "Agente pausado";
+                threadAgentStatus.className = conversation.isAgentEnabled
+                    ? "status-pill status-done"
+                    : "status-pill status-pending";
+            }
+
+            function renderMessages(messages, shouldScroll) {
+                messageList.replaceChildren();
+
+                if (!messages || messages.length === 0) {
+                    renderEmptyMessages();
+                    return;
+                }
+
+                messages.forEach(function (message) {
+                    var row = document.createElement("div");
+                    row.className = message.direction === "Outbound"
+                        ? "whatsapp-message-row outbound"
+                        : "whatsapp-message-row inbound";
+
+                    var bubble = document.createElement("article");
+                    bubble.className = "whatsapp-bubble";
+
+                    var label = document.createElement("span");
+                    label.className = "whatsapp-message-label";
+                    label.textContent = messageTypeLabel(message.messageType);
+
+                    var body = document.createElement("p");
+                    body.textContent = message.body;
+
+                    var meta = document.createElement("small");
+                    meta.textContent = dateLabel(message.createdAtUtc) + statusLabel(message.status);
+
+                    bubble.appendChild(label);
+                    bubble.appendChild(body);
+                    bubble.appendChild(meta);
+
+                    if (message.error) {
+                        var error = document.createElement("small");
+                        error.className = "whatsapp-message-error";
+                        error.textContent = message.error;
+                        bubble.appendChild(error);
+                    }
+
+                    row.appendChild(bubble);
+                    messageList.appendChild(row);
+                });
+
+                if (shouldScroll) {
+                    messageList.scrollTop = messageList.scrollHeight;
+                }
+            }
+
+            function renderEmptyMessages() {
+                messageList.replaceChildren();
+                var empty = document.createElement("div");
+                empty.className = "whatsapp-thread-empty";
+                empty.textContent = selectedPhone ? "Sem mensagens" : "Nenhum chat selecionado";
+                messageList.appendChild(empty);
+                updateComposeState();
+            }
+
+            function updateComposeState() {
+                var enabled = Boolean(selectedPhone) && !isSending;
+                composeInput.disabled = !enabled;
+                composeButton.disabled = !enabled;
+            }
+
+            function selectedConversation() {
+                return conversations.find(function (item) { return item.phoneNumber === selectedPhone; }) || null;
+            }
+
+            function displayName(conversation) {
+                return conversation.customerName || conversation.phoneNumber;
+            }
+
+            function messageTypeLabel(value) {
+                switch (value) {
+                    case "Ai":
+                        return "IA";
+                    case "Agent":
+                        return "Agente";
+                    case "System":
+                        return "Sistema";
+                    default:
+                        return "Cliente";
+                }
+            }
+
+            function statusLabel(status) {
+                if (status === "Failed") {
+                    return " · falhou";
+                }
+
+                return "";
+            }
+
+            function dateLabel(value) {
+                var date = new Date(value);
+                if (Number.isNaN(date.getTime())) {
+                    return value || "-";
+                }
+
+                return date.toLocaleString("pt-BR", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit"
+                });
+            }
+
+            function showAlert(message) {
+                alertElement.hidden = false;
+                alertElement.textContent = message;
+            }
+
+            function hideAlert() {
+                alertElement.hidden = true;
+                alertElement.textContent = "";
+            }
+        });
+    </script>
+}

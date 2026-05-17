@@ -1,0 +1,408 @@
+@model ProductsViewModel
+
+@{
+    ViewData["Title"] = "Produtos";
+    var formTitle = Model.Form.IsEditing ? "Editar produto" : "Cadastrar produto";
+    var showProductForm = Model.Form.IsEditing || !ViewData.ModelState.IsValid || HasProductFormInput(Model.Form);
+    var showImportModal = Model.ImportPreview?.HasDuplicates == true;
+}
+
+<div class="dashboard-header">
+    <div>
+        <span class="app-kicker">@Model.CompanyPhone</span>
+        <h1>Produtos</h1>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="alert alert-warning" role="alert">@Model.ErrorMessage</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+{
+    <div class="alert alert-success" role="alert">@Model.SuccessMessage</div>
+}
+
+@if (Model.ImportSummary is not null)
+{
+    <div class="alert alert-info" role="status">
+        Importacao: @Model.ImportSummary.CreatedCount criado(s),
+        @Model.ImportSummary.UpdatedCount atualizado(s),
+        @Model.ImportSummary.SkippedCount ignorado(s).
+    </div>
+}
+
+@if (Model.ImportErrors.Count > 0)
+{
+    <section class="panel">
+        <div class="panel-heading">
+            <h2>Linhas nao importadas</h2>
+            <span class="muted">@Model.ImportErrors.Count erro(s)</span>
+        </div>
+        <ul class="mb-0">
+            @foreach (var error in Model.ImportErrors)
+            {
+                <li>
+                    @if (error.RowNumber > 0)
+                    {
+                        <span>Linha @error.RowNumber: </span>
+                    }
+                    @error.Message
+                </li>
+            }
+        </ul>
+    </section>
+}
+
+<section class="panel">
+    <div class="panel-heading">
+        <h2>Importar Excel</h2>
+        <a asp-action="DownloadTemplate" class="btn btn-outline-secondary btn-sm">Baixar modelo Excel</a>
+    </div>
+    <form asp-action="UploadImport" method="post" enctype="multipart/form-data" class="product-form">
+        <div class="agent-field">
+            <label class="form-label" for="productsFile">Arquivo de produtos</label>
+            <input class="form-control" id="productsFile" name="productsFile" type="file" accept=".xlsx" required />
+        </div>
+        <div class="product-form-actions">
+            <button type="submit" class="btn btn-outline-primary">Importar produtos</button>
+        </div>
+    </form>
+</section>
+
+@if (!showProductForm)
+{
+    <div class="product-create-toggle">
+        <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#product-form-panel" aria-expanded="false" aria-controls="product-form-panel">
+            Cadastrar produto
+        </button>
+    </div>
+}
+
+<section id="product-form-panel" class="panel product-form-panel collapse @(showProductForm ? "show" : null)">
+    <div class="panel-heading">
+        <h2>@formTitle</h2>
+        @if (Model.Form.IsEditing)
+        {
+            <a asp-action="Index" class="btn btn-outline-secondary btn-sm">Novo produto</a>
+        }
+    </div>
+
+    <form asp-action="Save" method="post" class="product-form">
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+        <input type="hidden" asp-for="Form.ProductId" />
+
+        <div class="agent-field product-name-field">
+            <label asp-for="Form.Name" class="form-label">Nome</label>
+            <input asp-for="Form.Name" class="form-control" maxlength="160" />
+            <span asp-validation-for="Form.Name" class="text-danger"></span>
+        </div>
+
+        <div class="agent-field">
+            <label asp-for="Form.Type" class="form-label">Tipo</label>
+            <input asp-for="Form.Type" class="form-control" maxlength="120" />
+        </div>
+
+        <div class="agent-field">
+            <label asp-for="Form.Brand" class="form-label">Marca</label>
+            <input asp-for="Form.Brand" class="form-control" maxlength="120" />
+        </div>
+
+        <div class="agent-field product-description-field">
+            <label asp-for="Form.Description" class="form-label">Descricao completa</label>
+            <textarea asp-for="Form.Description" class="form-control" rows="3"></textarea>
+        </div>
+
+        <div class="agent-field">
+            <label asp-for="Form.RetailPrice" class="form-label">Preco cheio</label>
+            <input asp-for="Form.RetailPrice" class="form-control" type="number" min="0" step="0.01" value="@DecimalValue(Model.Form.RetailPrice)" />
+            <span asp-validation-for="Form.RetailPrice" class="text-danger"></span>
+        </div>
+
+        <div class="agent-field">
+            <label asp-for="Form.PromotionalPrice" class="form-label">Preco promocional</label>
+            <input asp-for="Form.PromotionalPrice" class="form-control" type="number" min="0" step="0.01" value="@NullableDecimalValue(Model.Form.PromotionalPrice)" />
+            <span asp-validation-for="Form.PromotionalPrice" class="text-danger"></span>
+        </div>
+
+        <div class="agent-field">
+            <label asp-for="Form.WholesalePrice" class="form-label">Preco atacado</label>
+            <input asp-for="Form.WholesalePrice" class="form-control" type="number" min="0" step="0.01" value="@DecimalValue(Model.Form.WholesalePrice)" />
+            <span asp-validation-for="Form.WholesalePrice" class="text-danger"></span>
+        </div>
+
+        <div class="agent-field">
+            <label asp-for="Form.StockQuantity" class="form-label">Estoque atual</label>
+            <input asp-for="Form.StockQuantity" class="form-control" type="number" min="0" step="1" />
+            <span asp-validation-for="Form.StockQuantity" class="text-danger"></span>
+        </div>
+
+        <div class="agent-field">
+            <label asp-for="Form.LowStockThreshold" class="form-label">Limite de estoque baixo</label>
+            <input asp-for="Form.LowStockThreshold" class="form-control" type="number" min="0" step="1" />
+            <span asp-validation-for="Form.LowStockThreshold" class="text-danger"></span>
+        </div>
+
+        <div class="form-check product-active-check">
+            <input asp-for="Form.IsActive" class="form-check-input" />
+            <label asp-for="Form.IsActive" class="form-check-label">Produto ativo</label>
+        </div>
+
+        <div class="form-check">
+            <input asp-for="Form.SyncToMenu" class="form-check-input" />
+            <label asp-for="Form.SyncToMenu" class="form-check-label">Enviar para o cardapio como rascunho</label>
+        </div>
+
+        <div class="agent-field product-aliases-field">
+            <label asp-for="Form.AliasesText" class="form-label">Aliases</label>
+            <textarea asp-for="Form.AliasesText" class="form-control" rows="4"></textarea>
+        </div>
+
+        <div class="product-form-actions">
+            <button type="submit" class="btn btn-primary">Salvar produto</button>
+        </div>
+    </form>
+</section>
+
+<section class="panel product-list-panel">
+    <div class="panel-heading">
+        <h2>Produtos cadastrados</h2>
+        <span class="muted">@Model.Products.Count produto(s)</span>
+    </div>
+
+    @if (Model.Products.Count == 0)
+    {
+        <p class="muted">Nenhum produto encontrado para esta empresa.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table dashboard-table product-table">
+                <thead>
+                    <tr>
+                        <th>Produto</th>
+                        <th>Tipo</th>
+                        <th>Marca</th>
+                        <th>Descricao</th>
+                        <th>Preco cheio</th>
+                        <th>Promocional</th>
+                        <th>Atacado</th>
+                        <th>Estoque</th>
+                        <th>Limite baixo</th>
+                        <th>Aliases</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var product in Model.Products)
+                    {
+                        <tr class="@(product.IsActive ? null : "product-inactive-row")">
+                            <td>
+                                <strong>@product.Name</strong>
+                            </td>
+                            <td>@TextOrMuted(product.Type, "Sem tipo")</td>
+                            <td>@TextOrMuted(product.Brand, "Sem marca")</td>
+                            <td>@TextOrMuted(product.Description, "Sem descricao")</td>
+                            <td>@Money(product.RetailPrice)</td>
+                            <td>@NullableMoney(product.PromotionalPrice)</td>
+                            <td>@Money(product.WholesalePrice)</td>
+                            <td>@Quantity(product.StockQuantity)</td>
+                            <td>@Quantity(product.LowStockThreshold)</td>
+                            <td>
+                                @if (product.Aliases.Count == 0)
+                                {
+                                    <span class="muted">Sem aliases</span>
+                                }
+                                else
+                                {
+                                    <div class="product-alias-list">
+                                        @foreach (var alias in product.Aliases)
+                                        {
+                                            <span>@alias</span>
+                                        }
+                                    </div>
+                                }
+                            </td>
+                            <td>
+                                <span class="status-pill @(product.IsActive ? "status-done" : "status-pending")">
+                                    @(product.IsActive ? "Ativo" : "Inativo")
+                                </span>
+                            </td>
+                            <td>
+                                <div class="product-actions">
+                                    <a asp-action="Index" asp-route-editProductId="@product.Id" class="btn btn-outline-primary btn-sm">Editar</a>
+                                    @if (product.IsActive)
+                                    {
+                                        <form asp-action="Inactivate" method="post">
+                                            <input type="hidden" name="productId" value="@product.Id" />
+                                            <button type="submit" class="btn btn-outline-danger btn-sm">Inativar</button>
+                                        </form>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@if (Model.ImportPreview is not null)
+{
+    <div class="modal fade" id="product-import-modal" tabindex="-1" aria-labelledby="product-import-title" aria-hidden="true" data-show-import-modal="@showImportModal.ToString().ToLowerInvariant()">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <form asp-action="ConfirmImport" method="post">
+                    <div class="modal-header">
+                        <h2 class="modal-title h5" id="product-import-title">Resolver produtos duplicados</h2>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="muted">
+                            @Model.ImportPreview.ValidRowsCount linha(s) valida(s), @Model.ImportPreview.DuplicateRowsCount duplicada(s).
+                        </p>
+
+                        @for (var index = 0; index < Model.ImportPreview.Rows.Count; index++)
+                        {
+                            var row = Model.ImportPreview.Rows[index];
+                            <input type="hidden" name="ImportPreview.Rows[@index].RowNumber" value="@row.RowNumber" />
+                            <input type="hidden" name="ImportPreview.Rows[@index].ExistingProductId" value="@row.ExistingProductId" />
+                            <input type="hidden" name="ImportPreview.Rows[@index].ExistingProductName" value="@row.ExistingProductName" />
+                            <input type="hidden" name="ImportPreview.Rows[@index].Name" value="@row.Name" />
+                            <input type="hidden" name="ImportPreview.Rows[@index].Description" value="@row.Description" />
+                            <input type="hidden" name="ImportPreview.Rows[@index].Type" value="@row.Type" />
+                            <input type="hidden" name="ImportPreview.Rows[@index].Brand" value="@row.Brand" />
+                            <input type="hidden" name="ImportPreview.Rows[@index].RetailPrice" value="@DecimalValue(row.RetailPrice)" />
+                            <input type="hidden" name="ImportPreview.Rows[@index].PromotionalPrice" value="@NullableDecimalValue(row.PromotionalPrice)" />
+                            <input type="hidden" name="ImportPreview.Rows[@index].IsActive" value="@row.IsActive.ToString().ToLowerInvariant()" />
+
+                            if (!row.IsDuplicate)
+                            {
+                                <input type="hidden" name="ImportPreview.Rows[@index].Action" value="@ProductImportActions.Create" />
+                                continue;
+                            }
+
+                            <div class="border rounded p-3 mb-3">
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-md-3">
+                                        <span class="muted">Linha @row.RowNumber</span>
+                                        <strong class="d-block">@row.Name</strong>
+                                        <span class="muted">Ja existe: @row.ExistingProductName</span>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label" for="duplicate-action-@index">Acao</label>
+                                        <select id="duplicate-action-@index" name="ImportPreview.Rows[@index].Action" class="form-select" data-duplicate-action>
+                                            <option value="">Escolha...</option>
+                                            <option value="@ProductImportActions.Skip" selected="@(row.Action == ProductImportActions.Skip ? "selected" : null)">Ignorar</option>
+                                            <option value="@ProductImportActions.Update" selected="@(row.Action == ProductImportActions.Update ? "selected" : null)">Sobrescrever</option>
+                                            <option value="@ProductImportActions.Create" selected="@(row.Action == ProductImportActions.Create ? "selected" : null)">Criar novo</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label" for="new-name-@index">Novo nome</label>
+                                        <input id="new-name-@index" name="ImportPreview.Rows[@index].NewName" value="@row.NewName" class="form-control" maxlength="160" data-new-name />
+                                    </div>
+                                    <div class="col-md-2">
+                                        <span class="muted d-block">Preco</span>
+                                        <strong>@Money(row.RetailPrice)</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Confirmar importacao</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            document.querySelectorAll("[data-duplicate-action]").forEach(function (select) {
+                var container = select.closest(".row");
+                var input = container ? container.querySelector("[data-new-name]") : null;
+                var updateInput = function () {
+                    if (!input) {
+                        return;
+                    }
+
+                    var shouldEnable = select.value === "@ProductImportActions.Create";
+                    input.disabled = !shouldEnable;
+                    input.required = shouldEnable;
+                    if (!shouldEnable) {
+                        input.value = "";
+                    }
+                };
+
+                select.addEventListener("change", updateInput);
+                updateInput();
+            });
+
+            var modal = document.getElementById("product-import-modal");
+            if (modal && modal.dataset.showImportModal === "true" && window.bootstrap) {
+                new window.bootstrap.Modal(modal).show();
+            }
+        });
+    </script>
+}
+
+@functions {
+    private static string Money(decimal value)
+    {
+        return value.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("pt-BR"));
+    }
+
+    private static Microsoft.AspNetCore.Html.IHtmlContent NullableMoney(decimal? value)
+    {
+        return value is null
+            ? new Microsoft.AspNetCore.Html.HtmlString("<span class=\"muted\">-</span>")
+            : new Microsoft.AspNetCore.Html.HtmlString(Money(value.Value));
+    }
+
+    private static string DecimalValue(decimal value)
+    {
+        return value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private static string NullableDecimalValue(decimal? value)
+    {
+        return value is null ? string.Empty : DecimalValue(value.Value);
+    }
+
+    private static bool HasProductFormInput(ProductFormModel form)
+    {
+        return !string.IsNullOrWhiteSpace(form.Name) ||
+            !string.IsNullOrWhiteSpace(form.Description) ||
+            !string.IsNullOrWhiteSpace(form.Type) ||
+            !string.IsNullOrWhiteSpace(form.Brand) ||
+            !string.IsNullOrWhiteSpace(form.AliasesText) ||
+            form.RetailPrice != 0 ||
+            form.PromotionalPrice is not null ||
+            form.WholesalePrice != 0 ||
+            form.StockQuantity is not null ||
+            form.LowStockThreshold is not null ||
+            form.SyncToMenu ||
+            !form.IsActive;
+    }
+
+    private static string Quantity(int? value)
+    {
+        return value is null ? "-" : value.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private static Microsoft.AspNetCore.Html.IHtmlContent TextOrMuted(string? value, string muted)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? new Microsoft.AspNetCore.Html.HtmlString($"<span class=\"muted\">{muted}</span>")
+            : new Microsoft.AspNetCore.Html.HtmlString(System.Net.WebUtility.HtmlEncode(value));
+    }
+}

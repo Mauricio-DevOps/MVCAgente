@@ -1,0 +1,72 @@
+﻿<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Atendente WhatsApp</title>
+    <script type="importmap"></script>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/Mvc.styles.css" asp-append-version="true" />
+</head>
+@inject Mvc.Services.ExternalUrlResolver ExternalUrlResolver
+@{
+    var restaurantAdminBaseUrl = ExternalUrlResolver.GetRestaurantAdminBaseUrl();
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+    var hasRestaurantPortalAccess = PortalAccess.HasRestaurantAccess(User);
+    var hasWhatsAppPortalAccess = PortalAccess.HasWhatsAppAccess(User);
+    string MenuClass(string controller) => string.Equals(currentController, controller, StringComparison.OrdinalIgnoreCase)
+        ? "button primary"
+        : "button";
+}
+<body>
+    <header class="topbar">
+        <a class="brand" asp-area="" asp-controller="Dashboard" asp-action="Index">
+            <span class="brand-mark">R</span>
+            <span>
+                <strong>Restaurantes</strong><br />
+                <small>Atendente WhatsApp</small>
+            </span>
+        </a>
+
+        @if (User.Identity?.IsAuthenticated == true)
+        {
+            <nav class="nav" aria-label="Menu principal">
+                @if (hasRestaurantPortalAccess)
+                {
+                    <a class="button" href="@($"{restaurantAdminBaseUrl}/restaurante")">Restaurante</a>
+                    <a class="button" href="@($"{restaurantAdminBaseUrl}/restaurante/cardapio")">Cardapio</a>
+                    <a class="button" href="@($"{restaurantAdminBaseUrl}/restaurante/operacao")">Operacao</a>
+                }
+                @if (hasWhatsAppPortalAccess)
+                {
+                    <a class="@MenuClass("Dashboard")" asp-area="" asp-controller="Dashboard" asp-action="Index">Dashboard WhatsApp</a>
+                    <a class="@MenuClass("Products")" asp-area="" asp-controller="Products" asp-action="Index">Produtos WhatsApp</a>
+                    <a class="@MenuClass("Customers")" asp-area="" asp-controller="Customers" asp-action="Index">Clientes WhatsApp</a>
+                    <a class="@MenuClass("Conversations")" asp-area="" asp-controller="Conversations" asp-action="Index">Conversas WhatsApp</a>
+                    <a class="@MenuClass("Orders")" asp-area="" asp-controller="Orders" asp-action="Index">Pedidos WhatsApp</a>
+                    <a class="@MenuClass("Agent")" asp-area="" asp-controller="Agent" asp-action="Index">Agente WhatsApp</a>
+                }
+            </nav>
+
+            <form asp-controller="Account" asp-action="Logout" method="post" class="logout-form">
+                <button type="submit" class="button">Sair</button>
+            </form>
+        }
+    </header>
+
+    <div class="page">
+        <main role="main">
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="footer muted">
+        <div class="page">&copy; 2026 - Atendente WhatsApp</div>
+    </footer>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

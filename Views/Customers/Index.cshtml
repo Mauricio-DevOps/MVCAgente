@@ -1,0 +1,326 @@
+@model CustomersViewModel
+
+@{
+    ViewData["Title"] = "Clientes";
+    var formTitle = Model.Form.IsEditing ? "Editar cliente" : "Cadastrar cliente";
+    var showCustomerForm = Model.Form.IsEditing || !ViewData.ModelState.IsValid || HasCustomerFormInput(Model.Form);
+    var showImportModal = Model.ImportPreview?.HasDuplicates == true;
+}
+
+<div class="dashboard-header">
+    <div>
+        <span class="app-kicker">@Model.CompanyPhone</span>
+        <h1>Clientes</h1>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="alert alert-warning" role="alert">@Model.ErrorMessage</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+{
+    <div class="alert alert-success" role="alert">@Model.SuccessMessage</div>
+}
+
+@if (Model.ImportSummary is not null)
+{
+    <div class="alert alert-info" role="status">
+        Importacao: @Model.ImportSummary.CreatedCount criado(s),
+        @Model.ImportSummary.UpdatedCount atualizado(s),
+        @Model.ImportSummary.SkippedCount ignorado(s).
+    </div>
+}
+
+@if (Model.ImportErrors.Count > 0)
+{
+    <section class="panel">
+        <div class="panel-heading">
+            <h2>Linhas nao importadas</h2>
+            <span class="muted">@Model.ImportErrors.Count erro(s)</span>
+        </div>
+        <ul class="mb-0">
+            @foreach (var error in Model.ImportErrors)
+            {
+                <li>
+                    @if (error.RowNumber > 0)
+                    {
+                        <span>Linha @error.RowNumber: </span>
+                    }
+                    @error.Message
+                </li>
+            }
+        </ul>
+    </section>
+}
+
+<section class="panel">
+    <div class="panel-heading">
+        <h2>Importar Excel</h2>
+        <a asp-action="DownloadTemplate" class="btn btn-outline-secondary btn-sm">Baixar modelo Excel</a>
+    </div>
+    <form asp-action="UploadImport" method="post" enctype="multipart/form-data" class="product-form">
+        <div class="agent-field">
+            <label class="form-label" for="customersFile">Arquivo de clientes</label>
+            <input class="form-control" id="customersFile" name="customersFile" type="file" accept=".xlsx" required />
+        </div>
+        <div class="product-form-actions">
+            <button type="submit" class="btn btn-outline-primary">Importar clientes</button>
+        </div>
+    </form>
+</section>
+
+@if (!showCustomerForm)
+{
+    <div class="product-create-toggle">
+        <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#customer-form-panel" aria-expanded="false" aria-controls="customer-form-panel">
+            Cadastrar cliente
+        </button>
+    </div>
+}
+
+<section id="customer-form-panel" class="panel product-form-panel collapse @(showCustomerForm ? "show" : null)">
+    <div class="panel-heading">
+        <h2>@formTitle</h2>
+        @if (Model.Form.IsEditing)
+        {
+            <a asp-action="Index" class="btn btn-outline-secondary btn-sm">Novo cliente</a>
+        }
+    </div>
+
+    <form asp-action="Save" method="post" class="product-form">
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+        <input type="hidden" asp-for="Form.CustomerId" />
+
+        <div class="agent-field product-name-field">
+            <label asp-for="Form.ClienteNome" class="form-label">Nome</label>
+            <input asp-for="Form.ClienteNome" class="form-control" maxlength="160" />
+        </div>
+
+        <div class="agent-field">
+            <label asp-for="Form.CpfCnpj" class="form-label">CPF/CNPJ</label>
+            <input asp-for="Form.CpfCnpj" class="form-control" maxlength="32" />
+        </div>
+
+        <div class="agent-field">
+            <label asp-for="Form.ClienteEmail" class="form-label">Email</label>
+            <input asp-for="Form.ClienteEmail" class="form-control" maxlength="180" />
+            <span asp-validation-for="Form.ClienteEmail" class="text-danger"></span>
+        </div>
+
+        <div class="agent-field product-name-field">
+            <label asp-for="Form.ClienteEndereco" class="form-label">Endereco de entrega</label>
+            <textarea asp-for="Form.ClienteEndereco" class="form-control" maxlength="320" rows="2"></textarea>
+        </div>
+
+        <div class="agent-field">
+            <label asp-for="Form.ClienteTelefoneCelular" class="form-label">Telefone celular</label>
+            <input asp-for="Form.ClienteTelefoneCelular" class="form-control" maxlength="32" />
+            <span asp-validation-for="Form.ClienteTelefoneCelular" class="text-danger"></span>
+        </div>
+
+        <div class="product-form-actions">
+            <button type="submit" class="btn btn-primary">Salvar cliente</button>
+        </div>
+    </form>
+</section>
+
+<section class="panel product-list-panel">
+    <div class="panel-heading">
+        <h2>Clientes cadastrados</h2>
+        <span class="muted">@Model.Customers.Count cliente(s)</span>
+    </div>
+
+    @if (Model.Customers.Count == 0)
+    {
+        <p class="muted">Nenhum cliente encontrado para esta empresa.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table dashboard-table product-table">
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>CPF/CNPJ</th>
+                        <th>Email</th>
+                        <th>Endereco</th>
+                        <th>Telefone celular</th>
+                        <th>Criado em</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var customer in Model.Customers)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@TextOrMuted(customer.ClienteNome, "Sem nome")</strong>
+                            </td>
+                            <td>@TextOrMuted(customer.CpfCnpj, "-")</td>
+                            <td>@TextOrMuted(customer.ClienteEmail, "-")</td>
+                            <td>@TextOrMuted(customer.ClienteEndereco, "-")</td>
+                            <td>@customer.ClienteTelefoneCelular</td>
+                            <td>@DateOrMuted(customer.ClienteDataCriacao)</td>
+                            <td>
+                                <div class="product-actions">
+                                    <a asp-action="Index" asp-route-editCustomerId="@customer.Id" class="btn btn-outline-primary btn-sm">Editar</a>
+                                    <form asp-action="Delete" method="post">
+                                        <input type="hidden" name="customerId" value="@customer.Id" />
+                                        <button type="submit" class="btn btn-outline-danger btn-sm">Excluir</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@if (Model.ImportPreview is not null)
+{
+    <div class="modal fade" id="customer-import-modal" tabindex="-1" aria-labelledby="customer-import-title" aria-hidden="true" data-show-import-modal="@showImportModal.ToString().ToLowerInvariant()">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <form asp-action="ConfirmImport" method="post">
+                    <div class="modal-header">
+                        <h2 class="modal-title h5" id="customer-import-title">Resolver clientes duplicados</h2>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="muted">
+                            @Model.ImportPreview.ValidRowsCount linha(s) valida(s), @Model.ImportPreview.DuplicateRowsCount duplicada(s).
+                        </p>
+
+                        @for (var index = 0; index < Model.ImportPreview.Rows.Count; index++)
+                        {
+                            var row = Model.ImportPreview.Rows[index];
+                            <input type="hidden" name="ImportPreview.Rows[@index].RowNumber" value="@row.RowNumber" />
+                            <input type="hidden" name="ImportPreview.Rows[@index].ExistingCustomerId" value="@row.ExistingCustomerId" />
+                            <input type="hidden" name="ImportPreview.Rows[@index].ExistingCustomerName" value="@row.ExistingCustomerName" />
+                            <input type="hidden" name="ImportPreview.Rows[@index].DuplicateReason" value="@row.DuplicateReason" />
+                            <input type="hidden" name="ImportPreview.Rows[@index].ClienteNome" value="@row.ClienteNome" />
+                            <input type="hidden" name="ImportPreview.Rows[@index].CpfCnpj" value="@row.CpfCnpj" />
+                            <input type="hidden" name="ImportPreview.Rows[@index].ClienteEmail" value="@row.ClienteEmail" />
+                            <input type="hidden" name="ImportPreview.Rows[@index].ClienteEndereco" value="@row.ClienteEndereco" />
+                            <input type="hidden" name="ImportPreview.Rows[@index].ClienteTelefoneCelular" value="@row.ClienteTelefoneCelular" />
+
+                            if (!row.IsDuplicate)
+                            {
+                                <input type="hidden" name="ImportPreview.Rows[@index].Action" value="@CustomerImportActions.Create" />
+                                continue;
+                            }
+
+                            <div class="border rounded p-3 mb-3" data-duplicate-row data-original-cpf="@row.CpfCnpj">
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-md-3">
+                                        <span class="muted">Linha @row.RowNumber</span>
+                                        <strong class="d-block">@TextOrMuted(row.ClienteNome, row.ClienteTelefoneCelular)</strong>
+                                        <span class="muted">Duplicado por @row.DuplicateReason: @row.ExistingCustomerName</span>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label" for="duplicate-action-@index">Acao</label>
+                                        <select id="duplicate-action-@index" name="ImportPreview.Rows[@index].Action" class="form-select" data-duplicate-action>
+                                            <option value="">Escolha...</option>
+                                            <option value="@CustomerImportActions.Skip" selected="@(row.Action == CustomerImportActions.Skip ? "selected" : null)">Ignorar</option>
+                                            <option value="@CustomerImportActions.Update" selected="@(row.Action == CustomerImportActions.Update ? "selected" : null)">Sobrescrever</option>
+                                            <option value="@CustomerImportActions.Create" selected="@(row.Action == CustomerImportActions.Create ? "selected" : null)">Criar novo</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label" for="new-phone-@index">Novo telefone</label>
+                                        <input id="new-phone-@index" name="ImportPreview.Rows[@index].NewTelefoneCelular" value="@row.NewTelefoneCelular" class="form-control" maxlength="32" data-new-phone />
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label" for="new-cpf-@index">Novo CPF/CNPJ</label>
+                                        <input id="new-cpf-@index" name="ImportPreview.Rows[@index].NewCpfCnpj" value="@row.NewCpfCnpj" class="form-control" maxlength="32" data-new-cpf />
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Confirmar importacao</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            document.querySelectorAll("[data-duplicate-action]").forEach(function (select) {
+                var container = select.closest("[data-duplicate-row]");
+                var phoneInput = container ? container.querySelector("[data-new-phone]") : null;
+                var cpfInput = container ? container.querySelector("[data-new-cpf]") : null;
+                var originalCpf = container ? (container.dataset.originalCpf || "").trim() : "";
+                var updateInputs = function () {
+                    var shouldEnable = select.value === "@CustomerImportActions.Create";
+                    if (phoneInput) {
+                        phoneInput.disabled = !shouldEnable;
+                        phoneInput.required = shouldEnable;
+                        if (!shouldEnable) {
+                            phoneInput.value = "";
+                        }
+                    }
+
+                    if (cpfInput) {
+                        cpfInput.disabled = !shouldEnable;
+                        cpfInput.required = shouldEnable && originalCpf.length > 0;
+                        if (!shouldEnable) {
+                            cpfInput.value = "";
+                        }
+                    }
+                };
+
+                select.addEventListener("change", updateInputs);
+                updateInputs();
+            });
+
+            var modal = document.getElementById("customer-import-modal");
+            if (modal && modal.dataset.showImportModal === "true" && window.bootstrap) {
+                new window.bootstrap.Modal(modal).show();
+            }
+        });
+    </script>
+}
+
+@functions {
+    private static Microsoft.AspNetCore.Html.IHtmlContent TextOrMuted(string? value, string fallback)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? new Microsoft.AspNetCore.Html.HtmlString($"<span class=\"muted\">{System.Net.WebUtility.HtmlEncode(fallback)}</span>")
+            : new Microsoft.AspNetCore.Html.HtmlString(System.Net.WebUtility.HtmlEncode(value));
+    }
+
+    private static Microsoft.AspNetCore.Html.IHtmlContent DateOrMuted(string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value) &&
+            DateTimeOffset.TryParse(
+                value,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind,
+                out var date))
+        {
+            return new Microsoft.AspNetCore.Html.HtmlString(date.ToLocalTime().ToString("dd/MM/yyyy HH:mm"));
+        }
+
+        return new Microsoft.AspNetCore.Html.HtmlString("<span class=\"muted\">-</span>");
+    }
+
+    private static bool HasCustomerFormInput(CustomerFormModel form)
+    {
+        return !string.IsNullOrWhiteSpace(form.ClienteNome) ||
+            !string.IsNullOrWhiteSpace(form.CpfCnpj) ||
+            !string.IsNullOrWhiteSpace(form.ClienteEmail) ||
+            !string.IsNullOrWhiteSpace(form.ClienteEndereco) ||
+            !string.IsNullOrWhiteSpace(form.ClienteTelefoneCelular);
+    }
+}

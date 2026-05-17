@@ -1,0 +1,232 @@
+@model Mvc.Models.DashboardViewModel
+
+@{
+    ViewData["Title"] = "Dashboard";
+    var dashboard = Model.Dashboard;
+}
+
+<div class="dashboard-header">
+    <div>
+        <span class="app-kicker">@Model.CompanyPhone</span>
+        <h1>@Model.CompanyName</h1>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="alert alert-warning" role="alert">@Model.ErrorMessage</div>
+}
+
+@if (dashboard is null)
+{
+    <section class="empty-state">
+        <h2>Dashboard indisponivel</h2>
+        <p>Os dados aparecem aqui quando a API responder com as metricas da empresa.</p>
+    </section>
+}
+else
+{
+    <section class="metric-grid">
+        <article class="metric-card">
+            <span>Total de pedidos</span>
+            <strong>@dashboard.TotalOrders</strong>
+        </article>
+        <article class="metric-card">
+            <span>Total vendido</span>
+            <strong>@Money(dashboard.TotalSoldCents)</strong>
+        </article>
+        <article class="metric-card">
+            <span>Ticket medio</span>
+            <strong>@Money(dashboard.AverageTicketCents)</strong>
+        </article>
+        <article class="metric-card danger">
+            <span>Atrasados</span>
+            <strong>@dashboard.LateOrders</strong>
+        </article>
+    </section>
+
+    <section class="dashboard-grid">
+        <article class="panel">
+            <div class="panel-heading">
+                <h2>Status dos pedidos</h2>
+            </div>
+            <div class="status-list">
+                @foreach (var status in dashboard.StatusCounts)
+                {
+                    <div class="status-row">
+                        <span>@StatusLabel(status.Status)</span>
+                        <strong>@status.Count</strong>
+                    </div>
+                }
+            </div>
+        </article>
+
+        <article class="panel">
+            <div class="panel-heading">
+                <h2>Pendencias</h2>
+            </div>
+            <div class="status-list">
+                <div class="status-row">
+                    <span>Revisao pendente</span>
+                    <strong>@dashboard.PendingReviewOrders</strong>
+                </div>
+                <div class="status-row">
+                    <span>Pedidos vencidos</span>
+                    <strong>@dashboard.LateOrders</strong>
+                </div>
+                <div class="status-row">
+                    <span>Pedidos ativos</span>
+                    <strong>@ActiveOrders(dashboard.StatusCounts)</strong>
+                </div>
+            </div>
+        </article>
+    </section>
+
+    <section class="panel">
+        <div class="panel-heading">
+            <h2>Produtos mais vendidos</h2>
+        </div>
+        @if (dashboard.TopProducts.Count == 0)
+        {
+            <p class="muted">Nenhum item vendido ainda.</p>
+        }
+        else
+        {
+            <div class="ranking-list">
+                @for (var i = 0; i < dashboard.TopProducts.Count; i++)
+                {
+                    var product = dashboard.TopProducts[i];
+                    <div class="ranking-row">
+                        <span class="ranking-position">@(i + 1)</span>
+                        <div>
+                            <strong>@product.ProductName</strong>
+                            <span>@product.Quantity unidades</span>
+                        </div>
+                        <strong>@Money(product.TotalCents)</strong>
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
+    <section class="panel">
+        <div class="panel-heading">
+            <h2>Pedidos recentes</h2>
+        </div>
+        @if (dashboard.RecentOrders.Count == 0)
+        {
+            <p class="muted">Nenhum pedido encontrado para esta empresa.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table dashboard-table">
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Status</th>
+                            <th>Venda</th>
+                            <th>Itens</th>
+                            <th>Total</th>
+                            <th>Criado em</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var order in dashboard.RecentOrders)
+                        {
+                            <tr class="@(order.IsLate ? "late-row" : null)">
+                                <td>@order.PhoneNumber</td>
+                                <td>
+                                    <span class="status-pill @StatusClass(order.Status)">
+                                        @StatusLabel(order.Status)
+                                    </span>
+                                    @if (order.IsLate)
+                                    {
+                                        <span class="late-label">Vencido</span>
+                                    }
+                                </td>
+                                <td>@SaleTypeLabel(order.SaleType)</td>
+                                <td>
+                                    <div class="order-items">
+                                        @if (order.Items.Count == 0)
+                                        {
+                                            <span class="muted">Sem itens</span>
+                                        }
+                                        else
+                                        {
+                                            @foreach (var item in order.Items)
+                                            {
+                                                <span>@item.Quantity x @(item.ProductName ?? item.RequestedProductName)</span>
+                                            }
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(order.GeneralObservation))
+                                    {
+                                        <small class="muted">@order.GeneralObservation</small>
+                                    }
+                                </td>
+                                <td>@Money(order.TotalCents)</td>
+                                <td>@DateLabel(order.CreatedAtUtc)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+
+@functions {
+    private static string Money(long cents)
+    {
+        return (cents / 100m).ToString("C", System.Globalization.CultureInfo.GetCultureInfo("pt-BR"));
+    }
+
+    private static string DateLabel(string value)
+    {
+        return DateTime.TryParse(value, out var date)
+            ? date.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+            : value;
+    }
+
+    private static int ActiveOrders(IReadOnlyList<Mvc.Models.DashboardStatusCountResponse> statuses)
+    {
+        return statuses
+            .Where(status => status.Status is "EmProducao" or "EmRotaEntrega")
+            .Sum(status => status.Count);
+    }
+
+    private static string SaleTypeLabel(string? saleType)
+    {
+        return saleType switch
+        {
+            "varejo" => "Varejo",
+            "atacado" => "Atacado",
+            _ => "-"
+        };
+    }
+
+    private static string StatusLabel(string status)
+    {
+        return status switch
+        {
+            "PendingReview" => "Pendente",
+            "EmProducao" => "Em producao",
+            "EmRotaEntrega" => "Em entrega",
+            "Concluido" => "Concluido",
+            _ => status
+        };
+    }
+
+    private static string StatusClass(string status)
+    {
+        return status switch
+        {
+            "PendingReview" => "status-pending",
+            "EmProducao" => "status-production",
+            "EmRotaEntrega" => "status-delivery",
+            "Concluido" => "status-done",
+            _ => string.Empty
+        };
+    }
+}

@@ -1,0 +1,1048 @@
+@model AgentViewModel
+
+@{
+    ViewData["Title"] = "Agente";
+    var personaFaqRows = Model.Persona.Faqs.Count == 0
+        ? new[] { new AgentPersonaFaqResponse(string.Empty, string.Empty, string.Empty, true, 1) }
+        : Model.Persona.Faqs;
+    var feedbackResponses = Model.FeedbackSolicitations
+        .Where(solicitation => solicitation.Response is not null)
+        .Select(solicitation => solicitation.Response!)
+        .ToArray();
+    var promoterCount = feedbackResponses.Count(response => AgentFeedbackCustomerClassifications.Normalize(response.CustomerClassification) == AgentFeedbackCustomerClassifications.Promotor);
+    var neutralCount = feedbackResponses.Count(response => AgentFeedbackCustomerClassifications.Normalize(response.CustomerClassification) == AgentFeedbackCustomerClassifications.Neutro);
+    var detractorCount = feedbackResponses.Count(response => AgentFeedbackCustomerClassifications.Normalize(response.CustomerClassification) == AgentFeedbackCustomerClassifications.Detrator);
+    var unclassifiedCount = feedbackResponses.Count(response => AgentFeedbackCustomerClassifications.Normalize(response.CustomerClassification) == AgentFeedbackCustomerClassifications.Indefinido);
+}
+
+<div class="dashboard-header">
+    <div>
+        <span class="app-kicker">@Model.CompanyPhone</span>
+        <h1>Agente</h1>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="alert alert-warning" role="alert">@Model.ErrorMessage</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+{
+    <div class="alert alert-success" role="alert">@Model.SuccessMessage</div>
+}
+
+<section class="panel agent-section agent-persona-section">
+    <div class="panel-heading">
+        <h2>Persona do Agente</h2>
+    </div>
+
+    <form asp-action="SavePersona" method="post" class="agent-persona-form" data-agent-persona-form>
+        <div class="agent-persona-grid">
+            <div class="agent-field">
+                <label for="personaTone" class="form-label">Tom de voz</label>
+                <select id="personaTone" name="Tone" class="form-select">
+                    @foreach (var tone in AgentDefaults.ToneOptions)
+                    {
+                        <option value="@tone.Value" selected="@(tone.Value == Model.Persona.Tone)">@tone.Label</option>
+                    }
+                </select>
+            </div>
+
+            <div class="agent-field">
+                <label for="personaCustomInstructions" class="form-label">Instrucoes personalizadas</label>
+                <textarea id="personaCustomInstructions" name="CustomInstructions" class="form-control" rows="4" maxlength="2000">@Model.Persona.CustomInstructions</textarea>
+            </div>
+        </div>
+
+        <div class="persona-faq-header">
+            <div>
+                <strong>Respostas frequentes e FAQs</strong>
+                <p class="muted">FAQs ativas entram no contexto do agente para responder clientes.</p>
+            </div>
+            <button type="button" class="btn btn-outline-primary btn-sm" data-agent-add-faq>Adicionar FAQ</button>
+        </div>
+
+        <div class="persona-faq-list" data-agent-faq-list>
+            @for (var index = 0; index < personaFaqRows.Count; index++)
+            {
+                var faq = personaFaqRows[index];
+                <div class="persona-faq-row" data-agent-faq-row>
+                    <input type="hidden" name="Faqs[@index].Id" value="@faq.Id" />
+                    <input type="hidden" name="Faqs[@index].SortOrder" value="@(index + 1)" data-agent-faq-sort />
+
+                    <div class="agent-field">
+                        <label class="form-label" for="faq-question-@index">Pergunta</label>
+                        <input id="faq-question-@index" name="Faqs[@index].Question" class="form-control" value="@faq.Question" maxlength="300" />
+                    </div>
+
+                    <div class="agent-field">
+                        <label class="form-label" for="faq-answer-@index">Resposta</label>
+                        <textarea id="faq-answer-@index" name="Faqs[@index].Answer" class="form-control" rows="2" maxlength="1000">@faq.Answer</textarea>
+                    </div>
+
+                    <label class="persona-faq-active">
+                        <input type="hidden" name="Faqs[@index].IsActive" value="false" />
+                        <input type="checkbox" class="form-check-input" name="Faqs[@index].IsActive" value="true" checked="@faq.IsActive" />
+                        Ativa
+                    </label>
+
+                    <button type="button" class="btn btn-outline-danger btn-sm" data-agent-remove-faq>Remover</button>
+                </div>
+            }
+        </div>
+
+        <template data-agent-faq-template>
+            <div class="persona-faq-row" data-agent-faq-row>
+                <input type="hidden" name="Faqs[__index__].Id" value="" />
+                <input type="hidden" name="Faqs[__index__].SortOrder" value="__sort__" data-agent-faq-sort />
+
+                <div class="agent-field">
+                    <label class="form-label">Pergunta</label>
+                    <input name="Faqs[__index__].Question" class="form-control" maxlength="300" />
+                </div>
+
+                <div class="agent-field">
+                    <label class="form-label">Resposta</label>
+                    <textarea name="Faqs[__index__].Answer" class="form-control" rows="2" maxlength="1000"></textarea>
+                </div>
+
+                <label class="persona-faq-active">
+                    <input type="hidden" name="Faqs[__index__].IsActive" value="false" />
+                    <input type="checkbox" class="form-check-input" name="Faqs[__index__].IsActive" value="true" checked />
+                    Ativa
+                </label>
+
+                <button type="button" class="btn btn-outline-danger btn-sm" data-agent-remove-faq>Remover</button>
+            </div>
+        </template>
+
+        <div class="agent-bulk-actions">
+            <button type="submit" class="btn btn-primary">Salvar persona</button>
+        </div>
+    </form>
+</section>
+
+<section class="panel agent-section agent-feedback-section">
+    <div class="panel-heading">
+        <h2>Feedback automatico</h2>
+    </div>
+
+    <form asp-action="SaveFeedbackSettings" method="post" class="agent-feedback-form">
+        <div class="agent-feedback-grid">
+            <label class="persona-faq-active">
+                <input type="hidden" name="FeedbackSettingsForm.IsPostOrderEnabled" value="false" />
+                <input type="checkbox" class="form-check-input" name="FeedbackSettingsForm.IsPostOrderEnabled" value="true" checked="@Model.FeedbackSettingsForm.IsPostOrderEnabled" />
+                Enviar apos pedido concluido
+            </label>
+
+            <div class="agent-field">
+                <label class="form-label" for="feedback-delay">Intervalo apos conclusao</label>
+                <input id="feedback-delay" name="FeedbackSettingsForm.PostOrderDelayMinutes" class="form-control" type="number" min="1" step="1" value="@Model.FeedbackSettingsForm.PostOrderDelayMinutes" />
+            </div>
+
+            <div class="agent-field">
+                <label class="form-label" for="feedback-format">Formato aceito</label>
+                <select id="feedback-format" name="FeedbackSettingsForm.AcceptedFormat" class="form-select">
+                    @foreach (var format in AgentDefaults.FeedbackFormatOptions)
+                    {
+                        <option value="@format.Value" selected="@(format.Value == AgentFeedbackFormats.Normalize(Model.FeedbackSettingsForm.AcceptedFormat))">@format.Label</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <div class="agent-field">
+            <label class="form-label" for="feedback-message">Mensagem de solicitacao</label>
+            <textarea id="feedback-message" name="FeedbackSettingsForm.RequestMessage" class="form-control" rows="3">@Model.FeedbackSettingsForm.RequestMessage</textarea>
+        </div>
+
+        <div class="agent-feedback-grid">
+            <label class="persona-faq-active">
+                <input type="hidden" name="FeedbackSettingsForm.IsPeriodicSurveyEnabled" value="false" />
+                <input type="checkbox" class="form-check-input" name="FeedbackSettingsForm.IsPeriodicSurveyEnabled" value="true" checked="@Model.FeedbackSettingsForm.IsPeriodicSurveyEnabled" />
+                Sorteio periodico ativo
+            </label>
+
+            <div class="agent-field">
+                <label class="form-label" for="feedback-periodic-days">Periodicidade</label>
+                <input id="feedback-periodic-days" name="FeedbackSettingsForm.PeriodicSurveyDays" class="form-control" type="number" min="1" step="1" value="@Model.FeedbackSettingsForm.PeriodicSurveyDays" />
+            </div>
+
+            <div class="agent-field">
+                <label class="form-label" for="feedback-sample-size">Clientes sorteados</label>
+                <input id="feedback-sample-size" name="FeedbackSettingsForm.PeriodicSurveySampleSize" class="form-control" type="number" min="1" step="1" value="@Model.FeedbackSettingsForm.PeriodicSurveySampleSize" />
+            </div>
+        </div>
+
+        <div class="agent-bulk-actions">
+            <button type="submit" class="btn btn-primary">Salvar feedback</button>
+        </div>
+    </form>
+
+    @if (feedbackResponses.Length > 0)
+    {
+        <div class="feedback-summary-grid" aria-label="Resumo de feedback">
+            <div class="feedback-summary-card feedback-summary-promoter">
+                <span>Promotores</span>
+                <strong>@promoterCount</strong>
+            </div>
+            <div class="feedback-summary-card feedback-summary-neutral">
+                <span>Neutros</span>
+                <strong>@neutralCount</strong>
+            </div>
+            <div class="feedback-summary-card feedback-summary-detractor">
+                <span>Detratores</span>
+                <strong>@detractorCount</strong>
+            </div>
+            <div class="feedback-summary-card">
+                <span>Indefinidos</span>
+                <strong>@unclassifiedCount</strong>
+            </div>
+        </div>
+    }
+
+    <div class="panel-heading feedback-history-heading">
+        <h3>Historico de feedback</h3>
+        @if (!string.IsNullOrWhiteSpace(Model.FeedbackSettings.LastPeriodicSurveyRunAtUtc))
+        {
+            <span class="muted">Ultimo sorteio: @DateLabel(Model.FeedbackSettings.LastPeriodicSurveyRunAtUtc)</span>
+        }
+    </div>
+
+    @if (Model.FeedbackSolicitations.Count == 0)
+    {
+        <p class="muted">Nenhuma solicitacao de feedback registrada.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table dashboard-table">
+                <thead>
+                    <tr>
+                        <th>Cliente</th>
+                        <th>Origem</th>
+                        <th>Status</th>
+                        <th>Previsto</th>
+                        <th>Enviado</th>
+                        <th>Analise</th>
+                        <th>Resposta</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var solicitation in Model.FeedbackSolicitations)
+                    {
+                        <tr>
+                            <td>@solicitation.PhoneNumber</td>
+                            <td>@FeedbackKindLabel(solicitation.Kind)</td>
+                            <td>
+                                <span class="status-pill @FeedbackStatusClass(solicitation.Status)">
+                                    @FeedbackStatusLabel(solicitation.Status)
+                                </span>
+                                @if (!string.IsNullOrWhiteSpace(solicitation.LastError))
+                                {
+                                    <small class="feedback-error">@solicitation.LastError</small>
+                                }
+                            </td>
+                            <td>@DateLabel(solicitation.DueAtUtc)</td>
+                            <td>@(string.IsNullOrWhiteSpace(solicitation.SentAtUtc) ? "-" : DateLabel(solicitation.SentAtUtc))</td>
+                            <td>
+                                @if (solicitation.Response is null)
+                                {
+                                    <span class="muted">Sem analise</span>
+                                }
+                                else if (solicitation.Response.ResponseType == "AUDIO")
+                                {
+                                    <span class="muted">Audio sem analise</span>
+                                }
+                                else
+                                {
+                                    <div class="feedback-analysis">
+                                        <span class="feedback-badge @FeedbackClassificationClass(solicitation.Response.CustomerClassification)">
+                                            @FeedbackClassificationLabel(solicitation.Response.CustomerClassification)
+                                        </span>
+                                        <span class="feedback-badge @FeedbackSentimentClass(solicitation.Response.Sentiment)">
+                                            @FeedbackSentimentLabel(solicitation.Response.Sentiment)
+                                        </span>
+                                        <span class="feedback-badge">
+                                            @FeedbackCategoryLabel(solicitation.Response.Category)
+                                        </span>
+                                        @if (solicitation.Response.Score is not null)
+                                        {
+                                            <small class="muted">Pontuacao: @solicitation.Response.Score</small>
+                                        }
+                                    </div>
+                                }
+                            </td>
+                            <td>
+                                @if (solicitation.Response is null)
+                                {
+                                    <span class="muted">Sem resposta</span>
+                                }
+                                else if (solicitation.Response.ResponseType == "AUDIO")
+                                {
+                                    <a href="@solicitation.Response.MediaUrl" target="_blank" rel="noreferrer">Audio recebido</a>
+                                    <small class="muted">@solicitation.Response.MediaContentType</small>
+                                }
+                                else
+                                {
+                                    <span>@solicitation.Response.Text</span>
+                                    @if (!string.IsNullOrWhiteSpace(solicitation.Response.Summary))
+                                    {
+                                        <small class="feedback-summary-text">Resumo: @solicitation.Response.Summary</small>
+                                    }
+                                }
+                            </td>
+                            <td class="text-end">
+                                @if (solicitation.Status != "RESPONDED")
+                                {
+                                    <form asp-action="SendFeedbackSolicitation" method="post">
+                                        <input type="hidden" name="solicitationId" value="@solicitation.Id" />
+                                        <button type="submit" class="btn btn-outline-danger btn-sm">Enviar</button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<section class="panel agent-section agent-automation-section">
+    <div class="panel-heading">
+        <h2>Campanhas automatizadas</h2>
+    </div>
+
+    <form asp-action="SaveAutomatedCampaign" method="post" class="agent-automation-form" data-campaign-form>
+        <div class="agent-automation-grid">
+            <div class="agent-field">
+                <label class="form-label" for="automation-name">Nome</label>
+                <input id="automation-name" name="AutomatedCampaignForm.Name" class="form-control" value="@Model.AutomatedCampaignForm.Name" maxlength="160" />
+            </div>
+
+            <div class="agent-field">
+                <label class="form-label" for="automation-type">Tipo</label>
+                <select id="automation-type" name="AutomatedCampaignForm.Type" class="form-select" data-campaign-type>
+                    @foreach (var type in AgentDefaults.AutomatedCampaignTypeOptions)
+                    {
+                        <option value="@type.Value" selected="@(type.Value == AgentAutomatedCampaignTypes.Normalize(Model.AutomatedCampaignForm.Type))">@type.Label</option>
+                    }
+                </select>
+            </div>
+
+            <div class="agent-field" data-campaign-product>
+                <label class="form-label" for="automation-product">Produto</label>
+                <select id="automation-product" name="AutomatedCampaignForm.ProductId" class="form-select">
+                    <option value="">Selecione um produto</option>
+                    @foreach (var product in Model.Products)
+                    {
+                        <option value="@product.Id" selected="@(product.Id == Model.AutomatedCampaignForm.ProductId)">
+                            @product.Name - estoque @Quantity(product.StockQuantity) / limite @Quantity(product.LowStockThreshold)
+                        </option>
+                    }
+                </select>
+            </div>
+
+            <div class="agent-field" data-campaign-inactive>
+                <label class="form-label" for="automation-inactive-days">Dias sem pedido</label>
+                <input id="automation-inactive-days" name="AutomatedCampaignForm.InactiveDaysThreshold" class="form-control" type="number" min="1" step="1" value="@Model.AutomatedCampaignForm.InactiveDaysThreshold" />
+            </div>
+
+            <div class="agent-field">
+                <label class="form-label" for="automation-time">Horario diario</label>
+                <input id="automation-time" name="AutomatedCampaignForm.DailyRunTime" class="form-control" type="time" value="@Model.AutomatedCampaignForm.DailyRunTime" />
+            </div>
+
+            <div class="agent-field">
+                <label class="form-label" for="automation-cooldown">Cooldown por cliente</label>
+                <input id="automation-cooldown" name="AutomatedCampaignForm.CooldownDays" class="form-control" type="number" min="1" step="1" value="@Model.AutomatedCampaignForm.CooldownDays" />
+            </div>
+        </div>
+
+        <div class="agent-field">
+            <label class="form-label" for="automation-message">Mensagem</label>
+            <textarea id="automation-message" name="AutomatedCampaignForm.Message" class="form-control" rows="3">@Model.AutomatedCampaignForm.Message</textarea>
+        </div>
+
+        <label class="persona-faq-active">
+            <input type="hidden" name="AutomatedCampaignForm.IsActive" value="false" />
+            <input type="checkbox" class="form-check-input" name="AutomatedCampaignForm.IsActive" value="true" checked="@Model.AutomatedCampaignForm.IsActive" />
+            Campanha ativa
+        </label>
+
+        <div class="agent-bulk-actions">
+            <button type="submit" class="btn btn-primary">Salvar campanha</button>
+        </div>
+    </form>
+
+    @if (Model.AutomatedCampaigns.Count == 0)
+    {
+        <p class="muted">Nenhuma campanha automatizada cadastrada.</p>
+    }
+    else
+    {
+        <div class="automation-list">
+            @foreach (var campaign in Model.AutomatedCampaigns)
+            {
+                <details class="automation-card">
+                    <summary>
+                        <span>
+                            <strong>@campaign.Name</strong>
+                            <small>@AgentAutomatedCampaignTypes.ToLabel(campaign.Type)</small>
+                        </span>
+                        <span class="status-pill @(campaign.IsActive ? "status-done" : "status-pending")">
+                            @(campaign.IsActive ? "Ativa" : "Inativa")
+                        </span>
+                    </summary>
+
+                    <div class="automation-meta">
+                        <span>Horario: @campaign.DailyRunTime</span>
+                        <span>Cooldown: @campaign.CooldownDays dia(s)</span>
+                        @if (!string.IsNullOrWhiteSpace(campaign.ProductName))
+                        {
+                            <span>Produto: @campaign.ProductName</span>
+                        }
+                        @if (campaign.InactiveDaysThreshold is not null)
+                        {
+                            <span>Inatividade: @campaign.InactiveDaysThreshold dia(s)</span>
+                        }
+                    </div>
+
+                    <form asp-action="SaveAutomatedCampaign" method="post" class="agent-automation-form automation-edit-form" data-campaign-form>
+                        <input type="hidden" name="AutomatedCampaignForm.Id" value="@campaign.Id" />
+
+                        <div class="agent-automation-grid">
+                            <div class="agent-field">
+                                <label class="form-label">Nome</label>
+                                <input name="AutomatedCampaignForm.Name" class="form-control" value="@campaign.Name" maxlength="160" />
+                            </div>
+
+                            <div class="agent-field">
+                                <label class="form-label">Tipo</label>
+                                <select name="AutomatedCampaignForm.Type" class="form-select" data-campaign-type>
+                                    @foreach (var type in AgentDefaults.AutomatedCampaignTypeOptions)
+                                    {
+                                        <option value="@type.Value" selected="@(type.Value == AgentAutomatedCampaignTypes.Normalize(campaign.Type))">@type.Label</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="agent-field" data-campaign-product>
+                                <label class="form-label">Produto</label>
+                                <select name="AutomatedCampaignForm.ProductId" class="form-select">
+                                    <option value="">Selecione um produto</option>
+                                    @foreach (var product in Model.Products)
+                                    {
+                                        <option value="@product.Id" selected="@(product.Id == campaign.ProductId)">
+                                            @product.Name - estoque @Quantity(product.StockQuantity) / limite @Quantity(product.LowStockThreshold)
+                                        </option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="agent-field" data-campaign-inactive>
+                                <label class="form-label">Dias sem pedido</label>
+                                <input name="AutomatedCampaignForm.InactiveDaysThreshold" class="form-control" type="number" min="1" step="1" value="@(campaign.InactiveDaysThreshold ?? 30)" />
+                            </div>
+
+                            <div class="agent-field">
+                                <label class="form-label">Horario diario</label>
+                                <input name="AutomatedCampaignForm.DailyRunTime" class="form-control" type="time" value="@campaign.DailyRunTime" />
+                            </div>
+
+                            <div class="agent-field">
+                                <label class="form-label">Cooldown por cliente</label>
+                                <input name="AutomatedCampaignForm.CooldownDays" class="form-control" type="number" min="1" step="1" value="@campaign.CooldownDays" />
+                            </div>
+                        </div>
+
+                        <div class="agent-field">
+                            <label class="form-label">Mensagem</label>
+                            <textarea name="AutomatedCampaignForm.Message" class="form-control" rows="3">@campaign.Message</textarea>
+                        </div>
+
+                        <label class="persona-faq-active">
+                            <input type="hidden" name="AutomatedCampaignForm.IsActive" value="false" />
+                            <input type="checkbox" class="form-check-input" name="AutomatedCampaignForm.IsActive" value="true" checked="@campaign.IsActive" />
+                            Campanha ativa
+                        </label>
+
+                        <div class="agent-bulk-actions">
+                            <button type="submit" class="btn btn-primary btn-sm">Salvar alteracoes</button>
+                        </div>
+                    </form>
+
+                    <div class="automation-actions">
+                        <form asp-action="RunAutomatedCampaign" method="post">
+                            <input type="hidden" name="campaignId" value="@campaign.Id" />
+                            <button type="submit" class="btn btn-danger btn-sm">Executar agora</button>
+                        </form>
+                        <form asp-action="DeleteAutomatedCampaign" method="post">
+                            <input type="hidden" name="campaignId" value="@campaign.Id" />
+                            <button type="submit" class="btn btn-outline-danger btn-sm">Remover</button>
+                        </form>
+                    </div>
+
+                    @if (campaign.LastRun is null)
+                    {
+                        <p class="muted">Ainda nao houve execucao.</p>
+                    }
+                    else
+                    {
+                        <div class="automation-run-summary">
+                            <span>Ultima execucao: @DateLabel(campaign.LastRun.CompletedAtUtc)</span>
+                            <span>Elegiveis: @campaign.LastRun.EligibleCount</span>
+                            <span>Enviados: @campaign.LastRun.SentCount</span>
+                            <span>Falhas: @campaign.LastRun.FailedCount</span>
+                            <span>Cooldown: @campaign.LastRun.SkippedCooldownCount</span>
+                        </div>
+                    }
+
+                    @if (campaign.RecentDeliveries.Count > 0)
+                    {
+                        <div class="table-responsive">
+                            <table class="table dashboard-table">
+                                <thead>
+                                    <tr>
+                                        <th>Cliente</th>
+                                        <th>Status</th>
+                                        <th>Data</th>
+                                        <th>Erro</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var delivery in campaign.RecentDeliveries)
+                                    {
+                                        <tr>
+                                            <td>@delivery.PhoneNumber</td>
+                                            <td>
+                                                <span class="status-pill @(delivery.Sent ? "status-done" : "status-pending")">
+                                                    @(delivery.Sent ? "Enviado" : "Falhou")
+                                                </span>
+                                            </td>
+                                            <td>@DateLabel(delivery.CreatedAtUtc)</td>
+                                            <td>@(delivery.Error ?? "-")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </details>
+            }
+        </div>
+    }
+</section>
+
+<section class="panel agent-section">
+    <div class="panel-heading">
+        <h2>Campanha por produto</h2>
+    </div>
+
+    <form asp-action="PreviewCampaign" method="post" class="agent-toolbar">
+        <div class="agent-field">
+            <label for="selectedProductId" class="form-label">Produto</label>
+            <select id="selectedProductId" name="selectedProductId" class="form-select" disabled="@(Model.Products.Count == 0)">
+                <option value="">Selecione um produto</option>
+                @foreach (var product in Model.Products)
+                {
+                    <option value="@product.Id" selected="@(product.Id == Model.SelectedProductId)">
+                        @product.Name - @Money(product.RetailPrice)
+                    </option>
+                }
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary" disabled="@(Model.Products.Count == 0)">Gerar prévia</button>
+    </form>
+
+    @if (Model.Products.Count == 0)
+    {
+        <p class="muted">Nenhum produto encontrado para esta empresa.</p>
+    }
+
+    @if (Model.CampaignPreview is not null)
+    {
+        <div class="agent-preview">
+            <div class="status-row">
+                <span>Produto selecionado</span>
+                <strong>@Model.CampaignPreview.Product.Name</strong>
+            </div>
+            <div class="status-row">
+                <span>Clientes elegíveis</span>
+                <strong>@Model.CampaignPreview.Customers.Count</strong>
+            </div>
+        </div>
+
+        @if (Model.CampaignPreview.Customers.Count == 0)
+        {
+            <p class="muted">Nenhum cliente com pedido concluído deste produto.</p>
+        }
+        else
+        {
+            <form asp-action="SendCampaign" method="post" class="agent-send-form">
+                <input type="hidden" name="selectedProductId" value="@Model.SelectedProductId" />
+
+                <div class="agent-field">
+                    <label for="campaignMessage" class="form-label">Mensagem</label>
+                    <textarea id="campaignMessage" name="campaignMessage" class="form-control" rows="3">@Model.CampaignMessage</textarea>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table dashboard-table">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Último pedido</th>
+                                <th>Pedidos com produto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var customer in Model.CampaignPreview.Customers)
+                            {
+                                <tr>
+                                    <td>@customer.PhoneNumber</td>
+                                    <td>@DateLabel(customer.LastOrderAtUtc)</td>
+                                    <td>@customer.TotalOrders</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <button type="submit" class="btn btn-danger">Confirmar envio</button>
+            </form>
+        }
+    }
+</section>
+
+<section class="panel agent-section">
+    <div class="panel-heading">
+        <h2>Recorrência de clientes</h2>
+        <form asp-action="ConsultCustomers" method="post">
+            <button type="submit" class="btn btn-outline-primary btn-sm">Consultar clientes</button>
+        </form>
+    </div>
+
+    @if (Model.CustomersLoaded && Model.Customers.Count == 0)
+    {
+        <p class="muted">Nenhum cliente com pedido concluído para calcular recorrência.</p>
+    }
+
+    @if (Model.Customers.Count > 0)
+    {
+        <form asp-action="SendReminder" method="post" class="agent-send-form">
+            <div class="agent-field">
+                <label for="reminderMessage" class="form-label">Mensagem de lembrete</label>
+                <textarea id="reminderMessage" name="reminderMessage" class="form-control" rows="3">@Model.ReminderMessage</textarea>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table dashboard-table" data-agent-recurrence-table>
+                    <thead>
+                        <tr>
+                            <th class="agent-select-column">
+                                <input type="checkbox" class="form-check-input" data-agent-select-all aria-label="Selecionar todos os clientes" />
+                            </th>
+                            <th aria-sort="none">
+                                <button type="button" class="table-sort-button" data-sort-key="customer" data-sort-type="text">Cliente</button>
+                            </th>
+                            <th aria-sort="none">
+                                <button type="button" class="table-sort-button" data-sort-key="last-order" data-sort-type="date">Último pedido</button>
+                            </th>
+                            <th aria-sort="none">
+                                <button type="button" class="table-sort-button" data-sort-key="total" data-sort-type="number">Total</button>
+                            </th>
+                            <th aria-sort="none">
+                                <button type="button" class="table-sort-button" data-sort-key="average" data-sort-type="number">Média</button>
+                            </th>
+                            <th aria-sort="none">
+                                <button type="button" class="table-sort-button" data-sort-key="days" data-sort-type="number">Dias sem pedido</button>
+                            </th>
+                            <th aria-sort="none">
+                                <button type="button" class="table-sort-button" data-sort-key="situation" data-sort-type="text">Situação</button>
+                            </th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var customer in Model.Customers)
+                        {
+                            <tr class="@(customer.IsOverdue ? "late-row" : null)"
+                                data-sort-customer="@customer.PhoneNumber"
+                                data-sort-last-order="@customer.LastOrderAtUtc"
+                                data-sort-total="@customer.TotalOrders"
+                                data-sort-average="@Invariant(customer.AverageDaysBetweenOrders)"
+                                data-sort-days="@Invariant(customer.DaysSinceLastOrder)"
+                                data-sort-situation="@(customer.IsOverdue ? "Atrasado" : "Em dia")">
+                                <td>
+                                    <input type="checkbox" class="form-check-input agent-customer-check" name="phoneNumbers" value="@customer.PhoneNumber" aria-label="Selecionar @customer.PhoneNumber" />
+                                </td>
+                                <td>@customer.PhoneNumber</td>
+                                <td>@DateLabel(customer.LastOrderAtUtc)</td>
+                                <td>@customer.TotalOrders</td>
+                                <td>@Days(customer.AverageDaysBetweenOrders)</td>
+                                <td>@Days(customer.DaysSinceLastOrder)</td>
+                                <td>
+                                    @if (customer.IsOverdue)
+                                    {
+                                        <span class="late-label">Atrasado</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-pill status-done">Em dia</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    <button type="submit" name="phoneNumber" value="@customer.PhoneNumber" class="btn btn-outline-danger btn-sm">
+                                        Enviar lembrete
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="agent-bulk-actions">
+                <button type="submit" class="btn btn-danger">Enviar selecionados</button>
+            </div>
+        </form>
+    }
+</section>
+
+@if (Model.SendResult is not null && Model.SendResult.Results.Count > 0)
+{
+    <section class="panel agent-section">
+        <div class="panel-heading">
+            <h2>Resultado do envio</h2>
+        </div>
+        <div class="table-responsive">
+            <table class="table dashboard-table">
+                <thead>
+                    <tr>
+                        <th>Cliente</th>
+                        <th>Status</th>
+                        <th>Erro</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var result in Model.SendResult.Results)
+                    {
+                        <tr>
+                            <td>@result.PhoneNumber</td>
+                            <td>
+                                @if (result.Sent)
+                                {
+                                    <span class="status-pill status-done">Enviado</span>
+                                }
+                                else
+                                {
+                                    <span class="status-pill status-pending">Falhou</span>
+                                }
+                            </td>
+                            <td>@(result.Error ?? "-")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
+@section Scripts {
+    <script>
+        (() => {
+            const forms = Array.from(document.querySelectorAll("[data-campaign-form]"));
+            const updateForm = (form) => {
+                const type = form.querySelector("[data-campaign-type]")?.value;
+                const productFields = form.querySelectorAll("[data-campaign-product]");
+                const inactiveFields = form.querySelectorAll("[data-campaign-inactive]");
+
+                productFields.forEach((field) => {
+                    field.hidden = type !== "@AgentAutomatedCampaignTypes.ProductStock";
+                });
+
+                inactiveFields.forEach((field) => {
+                    field.hidden = type !== "@AgentAutomatedCampaignTypes.InactiveCustomers";
+                });
+            };
+
+            forms.forEach((form) => {
+                const select = form.querySelector("[data-campaign-type]");
+                select?.addEventListener("change", () => updateForm(form));
+                updateForm(form);
+            });
+        })();
+
+        (() => {
+            const form = document.querySelector("[data-agent-persona-form]");
+            if (!form) {
+                return;
+            }
+
+            const list = form.querySelector("[data-agent-faq-list]");
+            const template = form.querySelector("[data-agent-faq-template]");
+            const addButton = form.querySelector("[data-agent-add-faq]");
+
+            const rows = () => Array.from(list.querySelectorAll("[data-agent-faq-row]"));
+
+            const reindex = () => {
+                rows().forEach((row, index) => {
+                    row.querySelectorAll("[name]").forEach((field) => {
+                        field.name = field.name.replace(/Faqs\[(\d+|__index__)\]/, `Faqs[${index}]`);
+                    });
+                    const sortInput = row.querySelector("[data-agent-faq-sort]");
+                    if (sortInput) {
+                        sortInput.value = String(index + 1);
+                    }
+                });
+            };
+
+            addButton?.addEventListener("click", () => {
+                const index = rows().length;
+                const html = template.innerHTML
+                    .replaceAll("__index__", String(index))
+                    .replaceAll("__sort__", String(index + 1));
+                list.insertAdjacentHTML("beforeend", html);
+                reindex();
+            });
+
+            list.addEventListener("click", (event) => {
+                const button = event.target.closest("[data-agent-remove-faq]");
+                if (!button) {
+                    return;
+                }
+
+                const row = button.closest("[data-agent-faq-row]");
+                if (rows().length === 1) {
+                    row.querySelectorAll("input[type='text'], input:not([type]), textarea").forEach((field) => {
+                        field.value = "";
+                    });
+                    row.querySelectorAll("input[type='checkbox']").forEach((field) => {
+                        field.checked = true;
+                    });
+                    return;
+                }
+
+                row.remove();
+                reindex();
+            });
+        })();
+
+        (() => {
+            const table = document.querySelector("[data-agent-recurrence-table]");
+            if (!table) {
+                return;
+            }
+
+            const tbody = table.tBodies[0];
+            const sortButtons = Array.from(table.querySelectorAll("[data-sort-key]"));
+            const selectAll = table.querySelector("[data-agent-select-all]");
+            const customerChecks = Array.from(table.querySelectorAll(".agent-customer-check"));
+            const collator = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
+            let activeSortKey = "";
+            let sortDirection = 1;
+
+            const getSortValue = (row, key) => row.getAttribute(`data-sort-${key}`) ?? "";
+
+            const compareRows = (left, right, key, type) => {
+                const leftValue = getSortValue(left, key);
+                const rightValue = getSortValue(right, key);
+
+                if (leftValue === "" && rightValue === "") {
+                    return 0;
+                }
+
+                if (leftValue === "") {
+                    return 1;
+                }
+
+                if (rightValue === "") {
+                    return -1;
+                }
+
+                if (type === "number" || type === "date") {
+                    const leftNumber = type === "date" ? Date.parse(leftValue) : Number(leftValue);
+                    const rightNumber = type === "date" ? Date.parse(rightValue) : Number(rightValue);
+                    return (leftNumber - rightNumber) * sortDirection;
+                }
+
+                return collator.compare(leftValue, rightValue) * sortDirection;
+            };
+
+            sortButtons.forEach((button) => {
+                button.addEventListener("click", () => {
+                    const key = button.dataset.sortKey;
+                    const type = button.dataset.sortType ?? "text";
+                    if (!key) {
+                        return;
+                    }
+
+                    sortDirection = activeSortKey === key ? sortDirection * -1 : 1;
+                    activeSortKey = key;
+
+                    Array.from(tbody.rows)
+                        .sort((left, right) => compareRows(left, right, key, type))
+                        .forEach((row) => tbody.appendChild(row));
+
+                    sortButtons.forEach((sortButton) => {
+                        sortButton.removeAttribute("data-sort-direction");
+                        sortButton.closest("th")?.setAttribute("aria-sort", "none");
+                    });
+
+                    button.dataset.sortDirection = sortDirection === 1 ? "asc" : "desc";
+                    button.closest("th")?.setAttribute("aria-sort", sortDirection === 1 ? "ascending" : "descending");
+                });
+            });
+
+            const updateSelectAll = () => {
+                if (!selectAll) {
+                    return;
+                }
+
+                const selectedCount = customerChecks.filter((check) => check.checked).length;
+                selectAll.checked = selectedCount > 0 && selectedCount === customerChecks.length;
+                selectAll.indeterminate = selectedCount > 0 && selectedCount < customerChecks.length;
+            };
+
+            selectAll?.addEventListener("change", () => {
+                customerChecks.forEach((check) => {
+                    check.checked = selectAll.checked;
+                });
+                updateSelectAll();
+            });
+
+            customerChecks.forEach((check) => {
+                check.addEventListener("change", updateSelectAll);
+            });
+        })();
+    </script>
+}
+
+@functions {
+    private static string Money(decimal value)
+    {
+        return value.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("pt-BR"));
+    }
+
+    private static string Quantity(int? value)
+    {
+        return value is null ? "-" : value.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private static string FeedbackKindLabel(string value)
+    {
+        return value switch
+        {
+            "AGENT_DETECTED" => "Detectado pelo agente",
+            "PERIODIC" => "Sorteio",
+            _ => "Pedido"
+        };
+    }
+
+    private static string FeedbackCategoryLabel(string? value)
+    {
+        return AgentFeedbackCategories.Normalize(value) switch
+        {
+            AgentFeedbackCategories.Elogio => "Elogio",
+            AgentFeedbackCategories.Reclamacao => "Reclamacao",
+            AgentFeedbackCategories.Opiniao => "Opiniao",
+            AgentFeedbackCategories.Sugestao => "Sugestao",
+            AgentFeedbackCategories.Outro => "Outro",
+            _ => "Indefinido"
+        };
+    }
+
+    private static string FeedbackSentimentLabel(string? value)
+    {
+        return AgentFeedbackSentiments.Normalize(value) switch
+        {
+            AgentFeedbackSentiments.Positivo => "Positivo",
+            AgentFeedbackSentiments.Neutro => "Neutro",
+            AgentFeedbackSentiments.Negativo => "Negativo",
+            _ => "Indefinido"
+        };
+    }
+
+    private static string FeedbackSentimentClass(string? value)
+    {
+        return AgentFeedbackSentiments.Normalize(value) switch
+        {
+            AgentFeedbackSentiments.Positivo => "feedback-badge-positive",
+            AgentFeedbackSentiments.Negativo => "feedback-badge-negative",
+            AgentFeedbackSentiments.Neutro => "feedback-badge-neutral",
+            _ => "feedback-badge-muted"
+        };
+    }
+
+    private static string FeedbackClassificationLabel(string? value)
+    {
+        return AgentFeedbackCustomerClassifications.Normalize(value) switch
+        {
+            AgentFeedbackCustomerClassifications.Promotor => "Promotor",
+            AgentFeedbackCustomerClassifications.Neutro => "Neutro",
+            AgentFeedbackCustomerClassifications.Detrator => "Detrator",
+            _ => "Indefinido"
+        };
+    }
+
+    private static string FeedbackClassificationClass(string? value)
+    {
+        return AgentFeedbackCustomerClassifications.Normalize(value) switch
+        {
+            AgentFeedbackCustomerClassifications.Promotor => "feedback-badge-positive",
+            AgentFeedbackCustomerClassifications.Detrator => "feedback-badge-negative",
+            AgentFeedbackCustomerClassifications.Neutro => "feedback-badge-neutral",
+            _ => "feedback-badge-muted"
+        };
+    }
+
+    private static string FeedbackStatusLabel(string value)
+    {
+        return value switch
+        {
+            "SENT" => "Enviado",
+            "RESPONDED" => "Respondido",
+            "FAILED" => "Falhou",
+            _ => "Pendente"
+        };
+    }
+
+    private static string FeedbackStatusClass(string value)
+    {
+        return value switch
+        {
+            "SENT" => "status-pending",
+            "RESPONDED" => "status-done",
+            "FAILED" => "status-pending",
+            _ => "status-pending"
+        };
+    }
+
+    private static string DateLabel(string value)
+    {
+        return DateTime.TryParse(value, out var date)
+            ? date.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+            : value;
+    }
+
+    private static string Days(decimal? value)
+    {
+        return value is null
+            ? "-"
+            : $"{value.Value:0.#} dias";
+    }
+
+    private static string Invariant(decimal? value)
+    {
+        return value?.ToString("0.########", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+    }
+
+    private static string Invariant(decimal value)
+    {
+        return value.ToString("0.########", System.Globalization.CultureInfo.InvariantCulture);
+    }
+}

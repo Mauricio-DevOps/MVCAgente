@@ -1,0 +1,42 @@
+@model Mvc.Models.LoginViewModel
+
+@{
+    ViewData["Title"] = "Login";
+    var returnUrl = ViewData["ReturnUrl"] as string;
+}
+
+<div class="login-shell">
+    <section class="login-panel">
+        <div class="login-heading">
+            <span class="app-kicker">Atendente WhatsApp</span>
+            <h1>Acessar painel</h1>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
+        }
+
+        <form asp-action="Login" asp-route-returnUrl="@returnUrl" method="post" class="login-form">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+            <div class="mb-3">
+                <label asp-for="Username" class="form-label">Usuario</label>
+                <input asp-for="Username" class="form-control" autocomplete="username" autofocus />
+                <span asp-validation-for="Username" class="text-danger"></span>
+            </div>
+
+            <div class="mb-4">
+                <label asp-for="Password" class="form-label">Senha</label>
+                <input asp-for="Password" class="form-control" autocomplete="current-password" />
+                <span asp-validation-for="Password" class="text-danger"></span>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Entrar</button>
+        </form>
+    </section>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

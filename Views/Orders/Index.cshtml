@@ -1,0 +1,234 @@
+@model OrdersViewModel
+
+@{
+    ViewData["Title"] = "Pedidos";
+    var statuses = new[] { "PendingReview", "EmProducao", "EmRotaEntrega", "Concluido" };
+}
+
+<div class="dashboard-header">
+    <div>
+        <span class="app-kicker">@Model.CompanyPhone</span>
+        <h1>Pedidos</h1>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="alert alert-warning" role="alert">@Model.ErrorMessage</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+{
+    <div class="alert alert-success" role="alert">@Model.SuccessMessage</div>
+}
+
+@if (Model.ImportSummary is not null)
+{
+    <div class="alert alert-info" role="status">
+        Importacao historica: @Model.ImportSummary.CreatedOrderCount pedido(s),
+        @Model.ImportSummary.CreatedItemCount item(ns),
+        @Model.ImportSummary.SkippedOrderCount duplicado(s) ignorado(s).
+    </div>
+}
+
+@if (Model.ImportErrors.Count > 0)
+{
+    <section class="panel">
+        <div class="panel-heading">
+            <h2>Linhas nao importadas</h2>
+            <span class="muted">@Model.ImportErrors.Count aviso(s)</span>
+        </div>
+        <ul class="mb-0">
+            @foreach (var error in Model.ImportErrors)
+            {
+                <li>
+                    @if (error.RowNumber > 0)
+                    {
+                        <span>Linha @error.RowNumber: </span>
+                    }
+                    @error.Message
+                </li>
+            }
+        </ul>
+    </section>
+}
+
+<section class="panel">
+    <div class="panel-heading">
+        <h2>Importar historico</h2>
+        <a asp-action="DownloadHistoryTemplate" class="btn btn-outline-secondary btn-sm">Baixar modelo Excel</a>
+    </div>
+    <form asp-action="UploadHistoryImport" method="post" enctype="multipart/form-data" class="product-form">
+        <input type="hidden" name="selectedStatus" value="@Model.SelectedStatus" />
+        <div class="agent-field">
+            <label class="form-label" for="ordersFile">Arquivo de pedidos</label>
+            <input class="form-control" id="ordersFile" name="ordersFile" type="file" accept=".xlsx" required />
+        </div>
+        <div class="product-form-actions">
+            <button type="submit" class="btn btn-outline-primary">Importar historico</button>
+        </div>
+    </form>
+</section>
+
+<section class="panel orders-filter">
+    <form asp-action="Index" method="get" class="agent-toolbar">
+        <div class="agent-field">
+            <label for="status" class="form-label">Status</label>
+            <select id="status" name="status" class="form-select">
+                <option value="" selected="@(Model.SelectedStatus is null)">Todos</option>
+                @foreach (var status in statuses)
+                {
+                    <option value="@status" selected="@(Model.SelectedStatus == status)">@StatusLabel(status)</option>
+                }
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+    </form>
+</section>
+
+@if (Model.Customers.Count == 0)
+{
+    <section class="empty-state">
+        <h2>Nenhum pedido encontrado</h2>
+        <p>Os pedidos aparecem aqui quando houver registros para o filtro selecionado.</p>
+    </section>
+}
+else
+{
+    <section class="orders-summary">
+        <span>@Model.Customers.Count cliente(s)</span>
+        <strong>@Model.Customers.Sum(customer => customer.TotalOrders) pedido(s)</strong>
+    </section>
+
+    <div class="accordion order-accordion" id="ordersAccordion">
+        @for (var customerIndex = 0; customerIndex < Model.Customers.Count; customerIndex++)
+        {
+            var customer = Model.Customers[customerIndex];
+            var collapseId = $"customer-orders-{customerIndex}";
+            var headingId = $"customer-heading-{customerIndex}";
+
+            <section class="accordion-item order-customer">
+                <h2 class="accordion-header" id="@headingId">
+                    <button class="accordion-button @(customerIndex == 0 ? null : "collapsed")" type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId" aria-expanded="@(customerIndex == 0 ? "true" : "false")" aria-controls="@collapseId">
+                        <span class="order-customer-title">@customer.PhoneNumber</span>
+                        <span class="order-customer-meta">@customer.TotalOrders pedido(s)</span>
+                        <span class="order-customer-meta">@customer.OpenOrders aberto(s)</span>
+                        <span class="order-customer-meta">Ultimo: @DateLabel(customer.LastOrderAtUtc)</span>
+                    </button>
+                </h2>
+                <div id="@collapseId" class="accordion-collapse collapse @(customerIndex == 0 ? "show" : null)" aria-labelledby="@headingId" data-bs-parent="#ordersAccordion">
+                    <div class="accordion-body order-list">
+                        @foreach (var order in customer.Orders)
+                        {
+                            <article class="order-management-row">
+                                <div class="order-management-main">
+                                    <div>
+                                        <span class="app-kicker">Pedido @ShortId(order.Id)</span>
+                                        <strong>@DateLabel(order.CreatedAtUtc)</strong>
+                                        @if (!string.IsNullOrWhiteSpace(order.GeneralObservation))
+                                        {
+                                            <small class="muted">@order.GeneralObservation</small>
+                                        }
+                                    </div>
+                                    <div class="order-management-meta">
+                                        <span class="status-pill @StatusClass(order.Status)">@StatusLabel(order.Status)</span>
+                                        <span>@SaleTypeLabel(order.SaleType)</span>
+                                        <strong>@Money(order.TotalCents)</strong>
+                                    </div>
+                                </div>
+
+                                <div class="order-management-items">
+                                    @if (order.Items.Count == 0)
+                                    {
+                                        <span class="muted">Sem itens</span>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var item in order.Items)
+                                        {
+                                            <span>
+                                                @item.Quantity x @(item.ProductName ?? item.RequestedProductName)
+                                                @if (item.TotalPriceCents is not null)
+                                                {
+                                                    <text> - @Money(item.TotalPriceCents.Value)</text>
+                                                }
+                                            </span>
+                                        }
+                                    }
+                                </div>
+
+                                <form asp-action="UpdateStatus" method="post" class="order-status-form">
+                                    <input type="hidden" name="orderId" value="@order.Id" />
+                                    <input type="hidden" name="selectedStatus" value="@Model.SelectedStatus" />
+                                    <label class="form-label" for="status-@order.Id">Alterar status</label>
+                                    <div class="order-status-controls">
+                                        <select id="status-@order.Id" name="newStatus" class="form-select form-select-sm">
+                                            @foreach (var status in statuses)
+                                            {
+                                                <option value="@status" selected="@(order.Status == status)">@StatusLabel(status)</option>
+                                            }
+                                        </select>
+                                        <button type="submit" class="btn btn-outline-primary btn-sm">Salvar</button>
+                                    </div>
+                                </form>
+                            </article>
+                        }
+                    </div>
+                </div>
+            </section>
+        }
+    </div>
+}
+
+@functions {
+    private static string Money(long cents)
+    {
+        return (cents / 100m).ToString("C", System.Globalization.CultureInfo.GetCultureInfo("pt-BR"));
+    }
+
+    private static string DateLabel(string value)
+    {
+        return DateTime.TryParse(value, out var date)
+            ? date.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+            : value;
+    }
+
+    private static string ShortId(string value)
+    {
+        return value.Length <= 8 ? value : value[..8];
+    }
+
+    private static string SaleTypeLabel(string? saleType)
+    {
+        return saleType switch
+        {
+            "varejo" => "Varejo",
+            "atacado" => "Atacado",
+            _ => "-"
+        };
+    }
+
+    private static string StatusLabel(string status)
+    {
+        return status switch
+        {
+            "PendingReview" => "Pendente",
+            "EmProducao" => "Em producao",
+            "EmRotaEntrega" => "Em entrega",
+            "Concluido" => "Entregue",
+            _ => status
+        };
+    }
+
+    private static string StatusClass(string status)
+    {
+        return status switch
+        {
+            "PendingReview" => "status-pending",
+            "EmProducao" => "status-production",
+            "EmRotaEntrega" => "status-delivery",
+            "Concluido" => "status-done",
+            _ => string.Empty
+        };
+    }
+}
