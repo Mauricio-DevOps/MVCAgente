@@ -66,6 +66,23 @@
                 return;
             }
 
+            function resizeConversationPanel() {
+                var viewportHeight = window.visualViewport
+                    ? window.visualViewport.height
+                    : window.innerHeight;
+                var panelTop = root.getBoundingClientRect().top;
+                var bottomGap = 16;
+                var availableHeight = Math.max(180, Math.floor(viewportHeight - panelTop - bottomGap));
+
+                root.style.setProperty("--whatsapp-shell-height", availableHeight + "px");
+            }
+
+            resizeConversationPanel();
+            window.addEventListener("resize", resizeConversationPanel);
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener("resize", resizeConversationPanel);
+            }
+
             var listUrl = root.dataset.listUrl || "";
             var messagesUrl = root.dataset.messagesUrl || "";
             var toggleUrl = root.dataset.toggleUrl || "";

@@ -910,10 +910,10 @@ button:hover {
 .whatsapp-shell {
   display: grid;
   grid-template-columns: minmax(260px, 0.34fr) minmax(0, 1fr);
-  height: min(760px, calc(100vh - 220px));
-  height: min(760px, calc(100dvh - 220px));
-  max-height: calc(100vh - 220px);
-  max-height: calc(100dvh - 220px);
+  height: min(720px, calc(100vh - 300px));
+  height: var(--whatsapp-shell-height, min(720px, calc(100dvh - 300px)));
+  max-height: calc(100vh - 300px);
+  max-height: var(--whatsapp-shell-height, calc(100dvh - 300px));
   min-height: 0;
   overflow: hidden;
   border: 1px solid #d8cfc5;
@@ -1225,10 +1225,10 @@ button:hover {
   .whatsapp-shell {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(180px, 260px) minmax(0, 1fr);
-    height: min(760px, calc(100vh - 140px));
-    height: min(760px, calc(100dvh - 140px));
-    max-height: calc(100vh - 140px);
-    max-height: calc(100dvh - 140px);
+    height: min(720px, calc(100vh - 180px));
+    height: var(--whatsapp-shell-height, min(720px, calc(100dvh - 180px)));
+    max-height: calc(100vh - 180px);
+    max-height: var(--whatsapp-shell-height, calc(100dvh - 180px));
     min-height: 0;
   }
 
