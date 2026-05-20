@@ -10,10 +10,12 @@ namespace Mvc.Controllers;
 public sealed class DashboardController : Controller
 {
     private readonly ApiClient _apiClient;
+    private readonly BrandingSettingsStore _brandingSettingsStore;
 
-    public DashboardController(ApiClient apiClient)
+    public DashboardController(ApiClient apiClient, BrandingSettingsStore brandingSettingsStore)
     {
         _apiClient = apiClient;
+        _brandingSettingsStore = brandingSettingsStore;
     }
 
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
@@ -30,6 +32,12 @@ public sealed class DashboardController : Controller
         {
             model.ErrorMessage = "Login sem telefone de empresa vinculado.";
             return View(model);
+        }
+
+        var branding = await _brandingSettingsStore.GetAsync(companyPhone, cancellationToken);
+        if (branding is not null)
+        {
+            model.CompanyName = branding.SiteName;
         }
 
         try

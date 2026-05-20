@@ -1,0 +1,177 @@
+@model BrandingViewModel
+
+@{
+    ViewData["Title"] = "Personalizar";
+    var selectedPalette = BrandingDefaults.GetPalette(Model.PaletteKey);
+    var logoInitial = string.IsNullOrWhiteSpace(Model.SiteName)
+        ? "R"
+        : Model.SiteName.Trim()[0].ToString().ToUpperInvariant();
+}
+
+<div class="dashboard-header">
+    <div>
+        <span class="app-kicker">@Model.CompanyPhone</span>
+        <h1>Personalizar</h1>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="alert alert-warning" role="alert">@Model.ErrorMessage</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+{
+    <div class="alert alert-success" role="alert">@Model.SuccessMessage</div>
+}
+
+<section class="panel personalize-panel">
+    <div class="panel-heading">
+        <h2>Marca do painel</h2>
+    </div>
+
+    <form asp-action="Index" method="post" enctype="multipart/form-data" class="personalize-form" data-branding-form>
+        <div class="personalize-grid">
+            <div class="personalize-fields">
+                <label class="agent-field" for="siteName">
+                    Nome do site
+                    <input id="siteName" name="SiteName" class="form-control" value="@Model.SiteName" maxlength="120" required data-brand-name />
+                </label>
+
+                <fieldset class="brand-palette-field">
+                    <legend>Paleta de cores</legend>
+                    <div class="brand-palette-options">
+                        @foreach (var palette in BrandingDefaults.PaletteOptions)
+                        {
+                            <label class="brand-palette-option" style="--palette-primary:@palette.PrimaryColor; --palette-text:@palette.SecondaryColor; --palette-bg:@palette.BackgroundColor">
+                                <input type="radio" name="PaletteKey" value="@palette.Key" checked="@(palette.Key == selectedPalette.Key ? "checked" : null)" data-palette-option data-primary="@palette.PrimaryColor" data-secondary="@palette.SecondaryColor" data-background="@palette.BackgroundColor" />
+                                <span class="brand-palette-card">
+                                    <span class="brand-palette-swatches" aria-hidden="true">
+                                        <span style="background:@palette.PrimaryColor"></span>
+                                        <span style="background:@palette.BackgroundColor"></span>
+                                        <span style="background:@palette.SecondaryColor"></span>
+                                    </span>
+                                    <strong>@palette.Label</strong>
+                                </span>
+                            </label>
+                        }
+                    </div>
+                </fieldset>
+
+                <label class="agent-field" for="logo">
+                    Logo redonda
+                    <input id="logo" name="logo" class="form-control" type="file" accept="image/png,image/jpeg,image/webp" data-logo-input />
+                </label>
+
+                @if (!string.IsNullOrWhiteSpace(Model.LogoDataUrl))
+                {
+                    <label class="persona-faq-active">
+                        <input type="checkbox" class="form-check-input" name="RemoveLogo" value="true" data-remove-logo />
+                        <input type="hidden" name="RemoveLogo" value="false" />
+                        Remover logo atual
+                    </label>
+                }
+                else
+                {
+                    <input type="hidden" name="RemoveLogo" value="false" />
+                }
+
+                <div class="agent-bulk-actions">
+                    <button type="submit" class="btn btn-primary">Salvar personalizacao</button>
+                </div>
+            </div>
+
+            <aside class="brand-live-preview"
+                   style="--preview-primary:@selectedPalette.PrimaryColor; --preview-text:@selectedPalette.SecondaryColor; --preview-bg:@selectedPalette.BackgroundColor"
+                   aria-label="Previa da personalizacao"
+                   data-brand-preview>
+                <div class="brand-preview-topbar">
+                    <span class="brand-preview-logo" data-logo-preview>
+                        @if (!string.IsNullOrWhiteSpace(Model.LogoDataUrl))
+                        {
+                            <img src="@Model.LogoDataUrl" alt="Logo de @Model.SiteName" />
+                        }
+                        else
+                        {
+                            <span data-logo-initial>@logoInitial</span>
+                        }
+                    </span>
+                    <div>
+                        <strong data-brand-preview-name>@Model.SiteName</strong>
+                        <small>Atendente WhatsApp</small>
+                    </div>
+                </div>
+                <div class="brand-preview-content">
+                    <span>Preview</span>
+                    <h3 data-brand-preview-title>@Model.SiteName</h3>
+                    <div class="brand-preview-card">
+                        <span>Total de pedidos</span>
+                        <strong>42</strong>
+                    </div>
+                    <button type="button" class="button primary">Botao principal</button>
+                </div>
+            </aside>
+        </div>
+    </form>
+</section>
+
+@section Scripts {
+    <script>
+        (() => {
+            const form = document.querySelector("[data-branding-form]");
+            if (!form) {
+                return;
+            }
+
+            const nameInput = form.querySelector("[data-brand-name]");
+            const preview = form.querySelector("[data-brand-preview]");
+            const previewNames = form.querySelectorAll("[data-brand-preview-name], [data-brand-preview-title]");
+            const logoInput = form.querySelector("[data-logo-input]");
+            const logoPreview = form.querySelector("[data-logo-preview]");
+            const removeLogo = form.querySelector("[data-remove-logo]");
+
+            const updateName = () => {
+                const value = nameInput.value.trim() || "Restaurantes";
+                previewNames.forEach((element) => {
+                    element.textContent = value;
+                });
+
+                const initial = logoPreview?.querySelector("[data-logo-initial]");
+                if (initial) {
+                    initial.textContent = value.slice(0, 1).toUpperCase() || "R";
+                }
+            };
+
+            const updatePalette = (option) => {
+                preview.style.setProperty("--preview-primary", option.dataset.primary);
+                preview.style.setProperty("--preview-text", option.dataset.secondary);
+                preview.style.setProperty("--preview-bg", option.dataset.background);
+            };
+
+            nameInput.addEventListener("input", updateName);
+            form.querySelectorAll("[data-palette-option]").forEach((option) => {
+                option.addEventListener("change", () => updatePalette(option));
+            });
+
+            logoInput.addEventListener("change", () => {
+                const file = logoInput.files?.[0];
+                if (!file || !logoPreview) {
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.addEventListener("load", () => {
+                    logoPreview.innerHTML = "";
+                    const image = document.createElement("img");
+                    image.src = String(reader.result);
+                    image.alt = "Logo";
+                    logoPreview.appendChild(image);
+                    if (removeLogo) {
+                        removeLogo.checked = false;
+                    }
+                });
+                reader.readAsDataURL(file);
+            });
+        })();
+    </script>
+}

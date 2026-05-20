@@ -13,5 +13,6 @@ app.db*
 .env.*
 !.env.example
 App_Data/Keys/
+App_Data/Branding/
 Properties/ServiceDependencies/
 Properties/PublishProfiles/*.pubxml.user

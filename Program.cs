@@ -26,6 +26,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 builder.Services.AddSingleton<SsoTokenService>();
+builder.Services.AddSingleton<BrandingSettingsStore>();
 builder.Services.AddScoped<ExternalUrlResolver>();
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(keysDirectory));
