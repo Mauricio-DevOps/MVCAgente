@@ -7,10 +7,12 @@ namespace Mvc.Services;
 public sealed class ApiClient
 {
     private readonly HttpClient _httpClient;
+    private readonly ILogger<ApiClient> _logger;
 
-    public ApiClient(HttpClient httpClient)
+    public ApiClient(HttpClient httpClient, ILogger<ApiClient> logger)
     {
         _httpClient = httpClient;
+        _logger = logger;
     }
 
     public async Task<CompanyLoginResponse?> LoginAsync(
@@ -18,14 +20,32 @@ public sealed class ApiClient
         string password,
         CancellationToken cancellationToken)
     {
+        const string path = "/api/auth/login";
+        _logger.LogInformation("WhatsApp API login request starting. BaseAddress={BaseAddress}; Path={Path}.", _httpClient.BaseAddress, path);
+
         using var response = await _httpClient.PostAsJsonAsync(
-            "/api/auth/login",
+            path,
             new LoginRequest(username, password),
             cancellationToken);
 
+        _logger.LogInformation(
+            "WhatsApp API login response received. RequestUri={RequestUri}; StatusCode={StatusCode}; ReasonPhrase={ReasonPhrase}.",
+            response.RequestMessage?.RequestUri,
+            (int)response.StatusCode,
+            response.ReasonPhrase);
+
         if (response.StatusCode is HttpStatusCode.Unauthorized)
         {
+            _logger.LogInformation("WhatsApp API login returned Unauthorized.");
             return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogError(
+                "WhatsApp API login returned non-success status. StatusCode={StatusCode}; ReasonPhrase={ReasonPhrase}.",
+                (int)response.StatusCode,
+                response.ReasonPhrase);
         }
 
         response.EnsureSuccessStatusCode();

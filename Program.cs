@@ -54,6 +54,11 @@ builder.Services.AddHttpClient<RestaurantAuthClient>(client =>
 
 var app = builder.Build();
 
+app.Logger.LogInformation(
+    "MVCAgente configured login services. ApiBaseUrl={ApiBaseUrl}; RestaurantAdminBaseUrl={RestaurantAdminBaseUrl}.",
+    builder.Configuration["Api:BaseUrl"] ?? "http://localhost:5253",
+    builder.Configuration["ExternalLinks:RestaurantAdminBaseUrl"] ?? "http://localhost:5000");
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");

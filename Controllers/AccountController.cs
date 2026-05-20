@@ -14,17 +14,20 @@ public sealed class AccountController : Controller
     private readonly ExternalUrlResolver _externalUrlResolver;
     private readonly ApiClient _apiClient;
     private readonly RestaurantAuthClient _restaurantAuthClient;
+    private readonly ILogger<AccountController> _logger;
 
     public AccountController(
         SsoTokenService ssoTokenService,
         ExternalUrlResolver externalUrlResolver,
         ApiClient apiClient,
-        RestaurantAuthClient restaurantAuthClient)
+        RestaurantAuthClient restaurantAuthClient,
+        ILogger<AccountController> logger)
     {
         _ssoTokenService = ssoTokenService;
         _externalUrlResolver = externalUrlResolver;
         _apiClient = apiClient;
         _restaurantAuthClient = restaurantAuthClient;
+        _logger = logger;
     }
 
     [AllowAnonymous]
@@ -63,32 +66,46 @@ public sealed class AccountController : Controller
             return View("Login", input);
         }
 
+        var loginStage = "WhatsAppApi";
+        _logger.LogInformation(
+            "Login POST started. Target={Target}; UsernameProvided={UsernameProvided}.",
+            target,
+            !string.IsNullOrWhiteSpace(input.Username));
+
         try
         {
+            _logger.LogInformation("Login POST calling WhatsApp API login service.");
             var company = await _apiClient.LoginAsync(input.Username, input.Password, cancellationToken);
             if (company is not null)
             {
+                _logger.LogInformation("Login POST succeeded through WhatsApp API login service.");
                 await SignInWhatsAppCompanyAsync(company, accessMode: "SoWhatsApp");
                 return LocalRedirect(target);
             }
 
+            _logger.LogInformation("WhatsApp API login service returned invalid credentials. Trying restaurant login service.");
+            loginStage = "RestaurantApi";
             var restaurantLogin = await _restaurantAuthClient.LoginAsync(input.Username, input.Password, cancellationToken);
             if (restaurantLogin is not null)
             {
+                _logger.LogInformation("Login POST succeeded through restaurant login service.");
                 await SignInRestaurantWhatsAppAsync(restaurantLogin);
                 return LocalRedirect(target);
             }
 
+            _logger.LogInformation("Login POST finished with invalid credentials from all login services.");
             input.ErrorMessage = "Usuario ou senha invalidos.";
             return View("Login", input);
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException error)
         {
+            _logger.LogError(error, "Login POST failed while calling {LoginStage}.", loginStage);
             input.ErrorMessage = "Nao foi possivel conectar no servico de login.";
             return View("Login", input);
         }
-        catch (TaskCanceledException)
+        catch (TaskCanceledException error)
         {
+            _logger.LogError(error, "Login POST timed out while calling {LoginStage}.", loginStage);
             input.ErrorMessage = "A API demorou para responder ao login.";
             return View("Login", input);
         }
