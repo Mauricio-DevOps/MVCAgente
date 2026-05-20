@@ -14,20 +14,17 @@ public sealed class AccountController : Controller
     private readonly ExternalUrlResolver _externalUrlResolver;
     private readonly ApiClient _apiClient;
     private readonly RestaurantAuthClient _restaurantAuthClient;
-    private readonly ILogger<AccountController> _logger;
 
     public AccountController(
         SsoTokenService ssoTokenService,
         ExternalUrlResolver externalUrlResolver,
         ApiClient apiClient,
-        RestaurantAuthClient restaurantAuthClient,
-        ILogger<AccountController> logger)
+        RestaurantAuthClient restaurantAuthClient)
     {
         _ssoTokenService = ssoTokenService;
         _externalUrlResolver = externalUrlResolver;
         _apiClient = apiClient;
         _restaurantAuthClient = restaurantAuthClient;
-        _logger = logger;
     }
 
     [AllowAnonymous]
@@ -66,8 +63,6 @@ public sealed class AccountController : Controller
             return View("Login", input);
         }
 
-        var hadLoginServiceFailure = false;
-
         try
         {
             var company = await _apiClient.LoginAsync(input.Username, input.Password, cancellationToken);
@@ -76,42 +71,27 @@ public sealed class AccountController : Controller
                 await SignInWhatsAppCompanyAsync(company, accessMode: "SoWhatsApp");
                 return LocalRedirect(target);
             }
-        }
-        catch (HttpRequestException error)
-        {
-            hadLoginServiceFailure = true;
-            _logger.LogWarning(error, "WhatsApp login service failed for username {Username}.", input.Username);
-        }
-        catch (TaskCanceledException error)
-        {
-            hadLoginServiceFailure = true;
-            _logger.LogWarning(error, "WhatsApp login service timed out for username {Username}.", input.Username);
-        }
 
-        try
-        {
             var restaurantLogin = await _restaurantAuthClient.LoginAsync(input.Username, input.Password, cancellationToken);
             if (restaurantLogin is not null)
             {
                 await SignInRestaurantWhatsAppAsync(restaurantLogin);
                 return LocalRedirect(target);
             }
-        }
-        catch (HttpRequestException error)
-        {
-            hadLoginServiceFailure = true;
-            _logger.LogWarning(error, "Restaurant login service failed for username {Username}.", input.Username);
-        }
-        catch (TaskCanceledException error)
-        {
-            hadLoginServiceFailure = true;
-            _logger.LogWarning(error, "Restaurant login service timed out for username {Username}.", input.Username);
-        }
 
-        input.ErrorMessage = hadLoginServiceFailure
-            ? "Nao foi possivel conectar no servico de login."
-            : "Usuario ou senha invalidos.";
-        return View("Login", input);
+            input.ErrorMessage = "Usuario ou senha invalidos.";
+            return View("Login", input);
+        }
+        catch (HttpRequestException)
+        {
+            input.ErrorMessage = "Nao foi possivel conectar no servico de login.";
+            return View("Login", input);
+        }
+        catch (TaskCanceledException)
+        {
+            input.ErrorMessage = "A API demorou para responder ao login.";
+            return View("Login", input);
+        }
     }
 
     [AllowAnonymous]
