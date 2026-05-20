@@ -34,6 +34,21 @@ public sealed class DashboardController : Controller
 
         try
         {
+            var branding = await _apiClient.GetBrandingSettingsAsync(companyPhone, cancellationToken);
+            if (branding is not null)
+            {
+                model.CompanyName = branding.SiteName;
+            }
+        }
+        catch (HttpRequestException)
+        {
+        }
+        catch (TaskCanceledException)
+        {
+        }
+
+        try
+        {
             model.Dashboard = await _apiClient.GetDashboardAsync(companyPhone, cancellationToken);
         }
         catch (HttpRequestException)

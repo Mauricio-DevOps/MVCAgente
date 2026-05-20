@@ -1,4 +1,6 @@
-﻿<!DOCTYPE html>
+﻿@inject Mvc.Services.ExternalUrlResolver ExternalUrlResolver
+@inject Mvc.Services.ApiClient ApiClient
+<!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="utf-8" />
@@ -9,22 +11,53 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/Mvc.styles.css" asp-append-version="true" />
 </head>
-@inject Mvc.Services.ExternalUrlResolver ExternalUrlResolver
 @{
     var restaurantAdminBaseUrl = ExternalUrlResolver.GetRestaurantAdminBaseUrl();
     var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
     var hasRestaurantPortalAccess = PortalAccess.HasRestaurantAccess(User);
     var hasWhatsAppPortalAccess = PortalAccess.HasWhatsAppAccess(User);
+    var companyPhone = User.FindFirst(AuthClaims.CompanyPhone)?.Value ?? string.Empty;
+    var claimCompanyName = User.FindFirst(AuthClaims.CompanyName)?.Value ?? "Restaurantes";
+    BrandingSettingsResponse? branding = null;
+    if (User.Identity?.IsAuthenticated == true && !string.IsNullOrWhiteSpace(companyPhone))
+    {
+        try
+        {
+            branding = await ApiClient.GetBrandingSettingsAsync(companyPhone, ViewContext.HttpContext.RequestAborted);
+        }
+        catch (HttpRequestException)
+        {
+        }
+        catch (TaskCanceledException)
+        {
+        }
+    }
+
+    var brandName = branding?.SiteName ?? claimCompanyName;
+    var brandLogoDataUrl = branding?.LogoDataUrl;
+    var brandInitial = string.IsNullOrWhiteSpace(brandName)
+        ? "R"
+        : brandName.Trim()[0].ToString().ToUpperInvariant();
+    var brandStyle = $"--brand-primary:{branding?.PrimaryColor ?? BrandingDefaults.DefaultPrimaryColor}; --brand-text:{branding?.SecondaryColor ?? BrandingDefaults.DefaultSecondaryColor}; --brand-background:{branding?.BackgroundColor ?? BrandingDefaults.DefaultBackgroundColor};";
     string MenuClass(string controller) => string.Equals(currentController, controller, StringComparison.OrdinalIgnoreCase)
         ? "button primary"
         : "button";
 }
-<body>
+<body style="@brandStyle">
     <header class="topbar">
         <a class="brand" asp-area="" asp-controller="Dashboard" asp-action="Index">
-            <span class="brand-mark">R</span>
+            <span class="brand-mark">
+                @if (!string.IsNullOrWhiteSpace(brandLogoDataUrl))
+                {
+                    <img src="@brandLogoDataUrl" alt="Logo de @brandName" />
+                }
+                else
+                {
+                    @brandInitial
+                }
+            </span>
             <span>
-                <strong>Restaurantes</strong><br />
+                <strong>@brandName</strong><br />
                 <small>Atendente WhatsApp</small>
             </span>
         </a>
@@ -46,6 +79,7 @@
                     <a class="@MenuClass("Conversations")" asp-area="" asp-controller="Conversations" asp-action="Index">Conversas WhatsApp</a>
                     <a class="@MenuClass("Orders")" asp-area="" asp-controller="Orders" asp-action="Index">Pedidos WhatsApp</a>
                     <a class="@MenuClass("Agent")" asp-area="" asp-controller="Agent" asp-action="Index">Agente WhatsApp</a>
+                    <a class="@MenuClass("Personalizar")" asp-area="" asp-controller="Personalizar" asp-action="Index">Personalizar</a>
                 }
             </nav>
 

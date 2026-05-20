@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using Mvc.Models;
 
 namespace Mvc.Services;
 
@@ -19,6 +20,21 @@ public sealed class RestaurantMenuApiClient
         CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/internal/menu-items/sync-from-product")
+        {
+            Content = JsonContent.Create(syncRequest)
+        };
+
+        request.Headers.Add(ServiceKeyHeaderName, _configuration["InternalApi:ServiceKey"] ?? "");
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task SyncBrandingAsync(
+        BrandingSyncRequest syncRequest,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/internal/restaurant-branding/sync")
         {
             Content = JsonContent.Create(syncRequest)
         };
