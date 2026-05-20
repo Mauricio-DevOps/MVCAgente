@@ -41,37 +41,6 @@ public sealed class ApiClient
             cancellationToken);
     }
 
-    public async Task<BrandingSettingsResponse?> GetBrandingSettingsAsync(
-        string storeId,
-        CancellationToken cancellationToken)
-    {
-        using var response = await _httpClient.GetAsync(
-            $"/api/admin/branding?storeId={Uri.EscapeDataString(storeId)}",
-            cancellationToken);
-
-        if (response.StatusCode is HttpStatusCode.NotFound)
-        {
-            return null;
-        }
-
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<BrandingSettingsResponse>(cancellationToken);
-    }
-
-    public async Task<BrandingSettingsResponse> SaveBrandingSettingsAsync(
-        BrandingSettingsUpsertRequest request,
-        CancellationToken cancellationToken)
-    {
-        using var response = await _httpClient.PutAsJsonAsync(
-            "/api/admin/branding",
-            request,
-            cancellationToken);
-
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<BrandingSettingsResponse>(cancellationToken) ??
-            BrandingDefaults.CreateDefault(request.StoreId, request.SiteName);
-    }
-
     public async Task<IReadOnlyList<ProductResponse>> GetProductsAsync(
         string storeId,
         CancellationToken cancellationToken)

@@ -11,8 +11,7 @@ public static class PortalAccess
         "/Customers",
         "/Conversations",
         "/Orders",
-        "/Agent",
-        "/Personalizar"
+        "/Agent"
     };
 
     public static string NormalizeAccessMode(string? value)
