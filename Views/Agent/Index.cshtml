@@ -123,6 +123,29 @@
     </form>
 </section>
 
+<section class="panel agent-section agent-notification-section">
+    <div class="panel-heading">
+        <h2>Telefone Responsavel</h2>
+    </div>
+
+    <form asp-action="SaveNotificationSettings" method="post" class="agent-notification-form">
+        <div class="agent-field">
+            <label for="staffNotificationPhoneNumber" class="form-label">Telefone</label>
+            <input id="staffNotificationPhoneNumber"
+                   name="NotificationSettingsForm.StaffNotificationPhoneNumber"
+                   class="form-control"
+                   type="tel"
+                   value="@Model.NotificationSettingsForm.StaffNotificationPhoneNumber"
+                   autocomplete="tel"
+                   maxlength="32" />
+        </div>
+
+        <div class="agent-bulk-actions">
+            <button type="submit" class="btn btn-primary">Salvar telefone</button>
+        </div>
+    </form>
+</section>
+
 <section class="panel agent-section agent-feedback-section">
     <div class="panel-heading">
         <h2>Feedback automatico</h2>

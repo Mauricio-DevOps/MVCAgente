@@ -77,6 +77,42 @@ public sealed class AgentController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveNotificationSettings(
+        [Bind(Prefix = "NotificationSettingsForm")] AgentNotificationSettingsFormInput input,
+        CancellationToken cancellationToken)
+    {
+        var model = await CreateModelAsync(cancellationToken);
+        model.NotificationSettingsForm = input;
+
+        if (!CanUseAgent(model))
+        {
+            return View("Index", model);
+        }
+
+        try
+        {
+            model.NotificationSettings = await _apiClient.SaveAgentNotificationSettingsAsync(
+                new AgentNotificationSettingsUpsertRequest(
+                    model.CompanyPhone,
+                    input.StaffNotificationPhoneNumber?.Trim()),
+                cancellationToken);
+            model.NotificationSettingsForm = AgentNotificationSettingsFormInput.FromResponse(model.NotificationSettings);
+            model.SuccessMessage = "Telefone responsavel salvo.";
+        }
+        catch (HttpRequestException)
+        {
+            model.ErrorMessage = "Nao foi possivel salvar o telefone responsavel.";
+        }
+        catch (TaskCanceledException)
+        {
+            model.ErrorMessage = "A API demorou para salvar o telefone responsavel.";
+        }
+
+        return View("Index", model);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> SaveFeedbackSettings(
         [Bind(Prefix = "FeedbackSettingsForm")] AgentFeedbackSettingsFormInput input,
         CancellationToken cancellationToken)
@@ -452,6 +488,8 @@ public sealed class AgentController : Controller
         try
         {
             model.Persona = await _apiClient.GetAgentPersonaAsync(model.CompanyPhone, cancellationToken);
+            model.NotificationSettings = await _apiClient.GetAgentNotificationSettingsAsync(model.CompanyPhone, cancellationToken);
+            model.NotificationSettingsForm = AgentNotificationSettingsFormInput.FromResponse(model.NotificationSettings);
             model.FeedbackSettings = await _apiClient.GetAgentFeedbackSettingsAsync(model.CompanyPhone, cancellationToken);
             model.FeedbackSettingsForm = AgentFeedbackSettingsFormInput.FromResponse(model.FeedbackSettings);
             model.FeedbackSolicitations = await _apiClient.GetAgentFeedbackSolicitationsAsync(model.CompanyPhone, cancellationToken);

@@ -250,6 +250,29 @@ public sealed class ApiClient
             AgentDefaults.CreateDefaultPersona(request.StoreId);
     }
 
+    public async Task<AgentNotificationSettingsResponse> GetAgentNotificationSettingsAsync(
+        string storeId,
+        CancellationToken cancellationToken)
+    {
+        return await _httpClient.GetFromJsonAsync<AgentNotificationSettingsResponse>(
+            $"/api/admin/agent/notifications/settings?storeId={Uri.EscapeDataString(storeId)}",
+            cancellationToken) ?? AgentDefaults.CreateDefaultNotificationSettings(storeId);
+    }
+
+    public async Task<AgentNotificationSettingsResponse> SaveAgentNotificationSettingsAsync(
+        AgentNotificationSettingsUpsertRequest request,
+        CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.PutAsJsonAsync(
+            "/api/admin/agent/notifications/settings",
+            request,
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<AgentNotificationSettingsResponse>(cancellationToken) ??
+            AgentDefaults.CreateDefaultNotificationSettings(request.StoreId);
+    }
+
     public async Task<AgentFeedbackSettingsResponse> GetAgentFeedbackSettingsAsync(
         string storeId,
         CancellationToken cancellationToken)

@@ -20,6 +20,12 @@ public sealed class AgentViewModel
 
     public AgentPersonaSettingsResponse Persona { get; set; } = AgentDefaults.CreateDefaultPersona(string.Empty);
 
+    public AgentNotificationSettingsResponse NotificationSettings { get; set; } =
+        AgentDefaults.CreateDefaultNotificationSettings(string.Empty);
+
+    public AgentNotificationSettingsFormInput NotificationSettingsForm { get; set; } =
+        AgentNotificationSettingsFormInput.CreateDefault();
+
     public AgentFeedbackSettingsResponse FeedbackSettings { get; set; } =
         AgentDefaults.CreateDefaultFeedbackSettings(string.Empty);
 
@@ -97,6 +103,14 @@ public static class AgentDefaults
             UpdatedAtUtc: string.Empty);
     }
 
+    public static AgentNotificationSettingsResponse CreateDefaultNotificationSettings(string storeId)
+    {
+        return new AgentNotificationSettingsResponse(
+            storeId,
+            StaffNotificationPhoneNumber: null,
+            UpdatedAtUtc: string.Empty);
+    }
+
     public static string BuildCustomerReminderMessage(string? tone)
     {
         return AgentPersonaTones.Normalize(tone) switch
@@ -158,6 +172,24 @@ public sealed class AgentPersonaFaqFormInput
     public bool IsActive { get; set; } = true;
 
     public int SortOrder { get; set; }
+}
+
+public sealed class AgentNotificationSettingsFormInput
+{
+    public string? StaffNotificationPhoneNumber { get; set; }
+
+    public static AgentNotificationSettingsFormInput CreateDefault()
+    {
+        return new AgentNotificationSettingsFormInput();
+    }
+
+    public static AgentNotificationSettingsFormInput FromResponse(AgentNotificationSettingsResponse response)
+    {
+        return new AgentNotificationSettingsFormInput
+        {
+            StaffNotificationPhoneNumber = response.StaffNotificationPhoneNumber
+        };
+    }
 }
 
 public sealed record ProductResponse(
@@ -502,6 +534,15 @@ public sealed record AgentPersonaSettingsUpsertRequest(
     string Tone,
     string? CustomInstructions,
     IReadOnlyList<AgentPersonaFaqUpsert> Faqs);
+
+public sealed record AgentNotificationSettingsResponse(
+    string StoreId,
+    string? StaffNotificationPhoneNumber,
+    string UpdatedAtUtc);
+
+public sealed record AgentNotificationSettingsUpsertRequest(
+    string StoreId,
+    string? StaffNotificationPhoneNumber);
 
 public sealed record AgentPersonaFaqResponse(
     string Id,
