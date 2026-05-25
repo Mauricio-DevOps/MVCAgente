@@ -63,6 +63,7 @@ public sealed class AccountController : Controller
             return View("Login", input);
         }
 
+        var apiLoginUnavailable = false;
         try
         {
             var company = await _apiClient.LoginAsync(input.Username, input.Password, cancellationToken);
@@ -71,16 +72,24 @@ public sealed class AccountController : Controller
                 await SignInWhatsAppCompanyAsync(company, accessMode: "SoWhatsApp");
                 return LocalRedirect(target);
             }
+        }
+        catch (HttpRequestException)
+        {
+            apiLoginUnavailable = true;
+        }
+        catch (TaskCanceledException)
+        {
+            apiLoginUnavailable = true;
+        }
 
+        try
+        {
             var restaurantLogin = await _restaurantAuthClient.LoginAsync(input.Username, input.Password, cancellationToken);
             if (restaurantLogin is not null)
             {
                 await SignInRestaurantWhatsAppAsync(restaurantLogin);
                 return LocalRedirect(target);
             }
-
-            input.ErrorMessage = "Usuario ou senha invalidos.";
-            return View("Login", input);
         }
         catch (HttpRequestException)
         {
@@ -92,6 +101,11 @@ public sealed class AccountController : Controller
             input.ErrorMessage = "A API demorou para responder ao login.";
             return View("Login", input);
         }
+
+        input.ErrorMessage = apiLoginUnavailable
+            ? "Usuario ou senha invalidos. A API do WhatsApp tambem nao respondeu ao login."
+            : "Usuario ou senha invalidos.";
+        return View("Login", input);
     }
 
     [AllowAnonymous]
